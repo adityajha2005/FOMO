@@ -118,4 +118,5 @@ def positions(rows, prices=None):
 def alert_line(a):
     side = "[green]BUY [/]" if a.get("type") == "buy" else "[red]SELL[/]" if a.get("type") == "sell" else "[cyan]THES[/]"
     size = f" ${a['usdValue']:,.0f}" if a.get("usdValue") else ""
-    return f"{ago((a.get('ts') or 0) / 1000):>4} {side} {a.get('trader', '?'):<18} {a.get('token', '?'):<12} {a.get('chain', ''):<9}{size}"
+    trader, token, chain = a.get("trader") or "?", a.get("token") or "?", a.get("chain") or ""
+    return f"{ago((a.get('ts') or 0) / 1000):>4} {side} {trader:<18} {token:<12} {chain:<9}{size}"

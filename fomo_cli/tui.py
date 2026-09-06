@@ -201,7 +201,7 @@ class Dashboard(App):
     def alert_markup(a):
         side = {"buy": "[green]BUY [/]", "sell": "[red]SELL[/]"}.get(a.get("type"), "[cyan]THES[/]")
         size = f" [bold]${a['usdValue']:,.0f}[/]" if a.get("usdValue") else ""
-        return f"[dim]{ago((a.get('ts') or 0) / 1000):>4}[/] {side} [bold]{a.get('trader', '?')}[/] {a.get('token', '?')} [dim]{a.get('chain', '')}[/]{size}"
+        return f"[dim]{ago((a.get('ts') or 0) / 1000):>4}[/] {side} [bold]{a.get('trader') or '?'}[/] {a.get('token') or '?'} [dim]{a.get('chain') or ''}[/]{size}"
 
     # ---- copy loop in a thread ----
     def copy_loop(self):
