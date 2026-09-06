@@ -8,11 +8,12 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Header, RichLog, Static
+from textual.widgets import DataTable, Footer, Header, Markdown, RichLog, Static
 
 from .api import ApiError, dex_pair
+from .formulas import FORMULAS_MD, explain_sizes
 from .scoring import describe, trade_conviction
-from .sizing import all_sizes
+from .sizing import STYLE_MULT, all_sizes
 from .ui import STYLE_COLOR, ago, pct
 
 WINDOWS = ["all", "24h", "7d", "30d"]
@@ -27,8 +28,23 @@ def money(v, sign=False):
     return f"${s}"
 
 
+class FormulasScreen(Screen):
+    BINDINGS = [Binding("escape,q,f", "app.pop_screen", "back")]
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Markdown(FORMULAS_MD, id="formulas")
+        yield Footer()
+
+    def on_mount(self):
+        self.title = "fomo-cli — formulas"
+
+
 class TraderScreen(Screen):
-    BINDINGS = [Binding("escape,q", "app.pop_screen", "back"), Binding("s", "sizes", "sizes")]
+    BINDINGS = [Binding("escape,q", "app.pop_screen", "back"), Binding("f", "formulas", "formulas")]
+
+    def action_formulas(self):
+        self.app.push_screen(FormulasScreen())
 
     def __init__(self, app_state, handle):
         super().__init__()
@@ -83,10 +99,13 @@ class TraderScreen(Screen):
         if not s:
             return
         conv = trade_conviction(s.get("median_size"), s)
-        lines = [f"[bold]sizing on ${self.st.cfg.account_usd:,.0f} account[/] (▶ = active: {self.st.cfg.sizing})"]
-        for name, (usd, parts) in all_sizes(self.st.cfg, s, conv).items():
+        sizes = all_sizes(self.st.cfg, s, conv)
+        eq = explain_sizes(self.st.cfg, s, conv, sizes)
+        lines = [f"[bold]position size on ${self.st.cfg.account_usd:,.0f} account[/]  (▶ active: {self.st.cfg.sizing}, style mult {STYLE_MULT[s['style']]}, R {s['risk']}, C {s['conviction']})   [dim]f = all formulas[/]"]
+        for name, (usd, _) in sizes.items():
             mark = "▶" if name == self.st.cfg.sizing else " "
-            lines.append(f"{mark} {name:<11} [bold]{money(usd)}[/]   " + ", ".join(f"{k}={v}" for k, v in parts.items()))
+            lines.append(f"{mark} {name:<11} [bold]{money(usd):>8}[/]   [dim]{eq[name]}[/]")
+        lines.append(f"  cap                    [dim]{eq['cap']}[/]")
         self.query_one("#sizes", Static).update("\n".join(lines))
 
 
@@ -101,10 +120,12 @@ class Dashboard(App):
     TraderScreen #profile { padding: 0 1; border: round $accent; height: auto; }
     TraderScreen #theses { height: 1fr; }
     TraderScreen #sizes { padding: 0 1; border: round $secondary; height: auto; }
+    FormulasScreen #formulas { padding: 0 2; }
     """
     BINDINGS = [
         Binding("enter", "open", "open trader"),
         Binding("s", "score_all", "score all (credits)"),
+        Binding("f", "formulas", "formulas"),
         Binding("w", "window", "window"),
         Binding("c", "copy", "start/stop copy loop"),
         Binding("r", "refresh", "refresh"),
@@ -247,6 +268,9 @@ class Dashboard(App):
                 self.call_from_thread(self.log_line, f"[red]{h}: {e}[/]")
                 break
         self.call_from_thread(self.load_board)
+
+    def action_formulas(self):
+        self.push_screen(FormulasScreen())
 
     def action_window(self):
         self.window_i = (self.window_i + 1) % len(WINDOWS)

@@ -7,6 +7,7 @@
   python -m fomo_cli watch                    live alert feed from the follow set
   python -m fomo_cli copy [--once] [--live]   run the copy loop (paper unless --live)
   python -m fomo_cli positions | close <id> | events | me
+  python -m fomo_cli formulas                 the scoring / sizing / exit formulas
   python -m fomo_cli ui                       full-screen dashboard (default when run with no args)
   python -m fomo_cli shell                    interactive: same commands, no prefix
 """
@@ -57,7 +58,10 @@ class App:
     def size(self, handle, usd=None):
         s = self.bot.analyze(handle)
         conv = trade_conviction(usd, s) if usd else 1.0
-        ui.sizes(handle, s, all_sizes(self.cfg, s, conv), self.cfg.sizing)
+        from .formulas import explain_sizes
+
+        sizes = all_sizes(self.cfg, s, conv)
+        ui.sizes(handle, s, sizes, self.cfg.sizing, explain_sizes(self.cfg, s, conv, sizes))
 
     def watch(self, limit=40):
         import time
@@ -149,6 +153,7 @@ def parser():
     sub.add_parser("me")
     sub.add_parser("shell")
     sub.add_parser("ui")
+    sub.add_parser("formulas")
     return p
 
 
@@ -176,6 +181,12 @@ def run(argv, app):
         app.me()
     elif a.cmd == "shell":
         Shell(app).cmdloop()
+    elif a.cmd == "formulas":
+        from rich.markdown import Markdown
+
+        from .formulas import FORMULAS_MD
+
+        ui.console.print(Markdown(FORMULAS_MD))
     elif a.cmd == "ui":
         from .tui import run_tui
 

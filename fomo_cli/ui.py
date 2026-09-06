@@ -87,14 +87,16 @@ def theses(rows, handle):
     console.print(t)
 
 
-def sizes(handle, score, all_sizes, chosen):
+def sizes(handle, score, all_sizes, chosen, equations=None):
     t = Table(title=f"position size for copying @{handle} ({score['style']}, risk {score['risk']}, hit {pct(score['hit_rate'])})")
     t.add_column("formula")
     t.add_column("usd", justify="right")
-    t.add_column("inputs")
+    t.add_column("computation")
     for name, (usd_v, parts) in all_sizes.items():
-        mark = "[bold]*[/] " if name == chosen else "  "
-        t.add_row(mark + name, usd(usd_v), ", ".join(f"{k}={v}" for k, v in parts.items()))
+        mark = "[bold]▶[/] " if name == chosen else "  "
+        t.add_row(mark + name, usd(usd_v), equations[name] if equations else ", ".join(f"{k}={v}" for k, v in parts.items()))
+    if equations:
+        t.add_row("  cap", "", equations["cap"])
     console.print(t)
 
 

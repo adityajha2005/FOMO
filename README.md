@@ -218,10 +218,11 @@ confluence or a reliable thesis backs them. Paper mode by default; live Solana s
 
 ```
 cp fomo_cli.cfg.example fomo_cli.cfg      # set account_usd, sizing, FOMO_API_KEY (optional)
-venv/bin/python -m fomo_cli               # dashboard: ↑↓ + Enter opens a trader, s scores all, w window, c copy loop, x close, q quit
+venv/bin/python -m fomo_cli               # dashboard: ↑↓ + Enter opens a trader, f formulas, s scores all, w window, c copy loop, x close, q quit
 venv/bin/python -m fomo_cli top --score   # leaderboard with style/risk
 venv/bin/python -m fomo_cli trader unipcs # profile + every thesis with hit/miss
-venv/bin/python -m fomo_cli size unipcs --usd 20000   # the 3 sizing formulas
+venv/bin/python -m fomo_cli size unipcs --usd 20000   # the 3 sizing formulas with numbers plugged in
+venv/bin/python -m fomo_cli formulas      # every scoring / sizing / exit formula
 venv/bin/python -m fomo_cli watch         # live alerts from the follow set
 venv/bin/python -m fomo_cli copy          # paper copy loop; add --live for real Solana trades
 venv/bin/python -m fomo_cli shell         # interactive
