@@ -65,7 +65,6 @@ const TEAM_ROW = {
 export default function TradingDashboard() {
   const [activeTab, setActiveTab] = useState("Leaderboard");
   const [leaderboardWindow, setLeaderboardWindow] = useState("24h");
-  const [tradeSide, setTradeSide] = useState("buy");
   const [holdersTab, setHoldersTab] = useState("holders");
   const [currentCoin, setCurrentCoin] = useState(null);
   const [portfolioUsd, setPortfolioUsd] = useState(0);
@@ -91,7 +90,6 @@ export default function TradingDashboard() {
   const [actionMessage, setActionMessage] = useState(null);
 
   const fomoSymbol = DEFAULT_TOKEN;
-  const tradeSymbol = currentCoin?.symbol || fomoSymbol;
 
   const { alerts, connected: alertsConnected, delaySeconds: alertsDelaySeconds } = useFomoAlerts({
     enabled: LIVE_API_ENABLED && (activeTab === "Alerts" || activeTab === "Feed"),
@@ -346,13 +344,7 @@ export default function TradingDashboard() {
           />
         </main>
 
-        <TradePanel
-          symbol={tradeSymbol}
-          fomoSymbol={fomoSymbol}
-          side={tradeSide}
-          onSideChange={setTradeSide}
-          tokenStats={tokenStats}
-        />
+        <TradePanel fomoSymbol={fomoSymbol} tokenStats={tokenStats} />
       </div>
 
       <FooterTicker />

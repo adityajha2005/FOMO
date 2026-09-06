@@ -48,14 +48,14 @@ export default function DocsPage() {
       toc={TOC}
       related={[
         { label: "Formulas", to: "/formulas" },
-        { label: "Dashboard", to: "/" },
+        { label: "FOMO App", to: "/app" },
       ]}
       footer={
         <div className="docs-endcard">
           <p>
             Stuck? Check the terminal running <code>fomo_cli copy</code> — skips print with the reason.
           </p>
-          <Link to="/">Back to dashboard</Link>
+          <Link to="/app">Back to app</Link>
         </div>
       }
     >

@@ -52,7 +52,9 @@ export default function InfoPageLayout({
       <main className="docs">
         <header className="docs-header">
           <nav className="docs-crumb" aria-label="Breadcrumb">
-            <Link to="/">Dashboard</Link>
+            <Link to="/">Home</Link>
+            <span aria-hidden="true">/</span>
+            <Link to="/app">App</Link>
             <span aria-hidden="true">/</span>
             <span>{title}</span>
           </nav>

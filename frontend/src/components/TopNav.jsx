@@ -90,6 +90,9 @@ export default function TopNav({ portfolioUsd = 0, cashUsd = 0 }) {
       </Link>
 
       <nav className="top-nav__links" aria-label="Main">
+        <NavLink to="/app" className={({ isActive }) => (isActive ? "active" : undefined)}>
+          FOMO App
+        </NavLink>
         <NavLink to="/docs" className={({ isActive }) => (isActive ? "active" : undefined)}>
           Docs
         </NavLink>

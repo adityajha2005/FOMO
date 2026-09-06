@@ -790,6 +790,48 @@
   font-weight: 600;
 }
 
+.chart-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-fullscreen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chart-fullscreen-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.chart-panel--fullscreen,
+.chart-panel:fullscreen {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.chart-panel--fullscreen .chart-canvas,
+.chart-panel:fullscreen .chart-canvas {
+  flex: 1;
+  min-height: 0;
+}
+
 .chart-toolbar {
   display: flex;
   justify-content: space-between;

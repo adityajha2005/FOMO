@@ -78,7 +78,7 @@ export default function FormulasPage() {
       toc={TOC}
       related={[
         { label: "Docs", to: "/docs" },
-        { label: "Dashboard", to: "/" },
+        { label: "FOMO App", to: "/app" },
       ]}
       footer={
         <div className="docs-endcard docs-endcard--quote">
@@ -86,7 +86,7 @@ export default function FormulasPage() {
             Follow wallets that already win. Copy only when tape agrees. Never be the only bid in a thin
             pool.
           </blockquote>
-          <Link to="/">Trade →</Link>
+          <Link to="/app">Open app →</Link>
         </div>
       }
     >

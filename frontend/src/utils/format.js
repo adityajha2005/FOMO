@@ -57,6 +57,23 @@ export function formatUsd(value, { compact = false, decimals = 2 } = {}) {
   return `$${amount.toFixed(Math.max(decimals, 4))}`;
 }
 
+/** Ledger-style money: $0, $354k, $5.20M. */
+export function formatCompactUsd(value) {
+  const amount = Number(value) || 0;
+  const abs = Math.abs(amount);
+  const sign = amount < 0 ? "-" : "";
+
+  if (abs >= 1_000_000) {
+    return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
+  }
+
+  if (abs >= 1_000) {
+    return `${sign}$${Math.round(abs / 1_000)}k`;
+  }
+
+  return `${sign}$${Math.round(abs)}`;
+}
+
 export function formatTokenPrice(value) {
   const amount = Number(value) || 0;
 

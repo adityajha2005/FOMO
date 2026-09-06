@@ -60,6 +60,42 @@ function mapTraderEntry(trader) {
   };
 }
 
+/** Richer row for the landing "book" table: followers, trades, wallet, clan. */
+function mapBookEntry(trader, index) {
+  const handle = trader.handle || "unknown";
+  const name = trader.displayName || handle;
+  const pnlRaw = Number(trader.pnlUsd) || 0;
+  const wallet = trader.wallets?.solana || trader.wallets?.evm || null;
+
+  return {
+    id: handle,
+    rank: trader.rank ?? index + 1,
+    name,
+    handle,
+    ticker: `$${handle.replace(/[^a-zA-Z0-9]/g, "").toUpperCase()}`,
+    pnlRaw,
+    volumeRaw: Number(trader.volumeUsd) || 0,
+    trades: Number(trader.trades) || 0,
+    followers: Number(trader.followers) || 0,
+    holdings: Number(trader.holdings) || 0,
+    avatarUrl: trader.avatar || null,
+    initials: name.slice(0, 1).toUpperCase(),
+    clan: trader.clan?.name || null,
+    wallet,
+    walletIsSolana: Boolean(trader.wallets?.solana),
+    verified: Boolean(trader.verified),
+  };
+}
+
+export async function getBookTraders({ window = "24h", limit = 100 } = {}) {
+  const cacheKey = `fomo:book:v1:${window}:${limit}`;
+  return fetchWithCache(cacheKey, async () => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    const payload = await fomoapiRequest(`/v2/leaderboard/${window}?${params}`);
+    return (payload.traders ?? []).map(mapBookEntry);
+  }, LEADERBOARD_CACHE_MS);
+}
+
 function formatClanPnl(value) {
   const amount = Number(value) || 0;
   const abs = Math.abs(amount);

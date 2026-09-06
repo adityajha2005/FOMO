@@ -43,10 +43,13 @@ function generateCandles(count = 120) {
 }
 
 export default function PriceChart({ symbol = "PONS", live = false, price = "$0.922" }) {
+  const panelRef = useRef(null);
   const containerRef = useRef(null);
+  const chartRef = useRef(null);
   const seriesRef = useRef(null);
   const [interval, setInterval] = useState("1d");
   const [range, setRange] = useState("1D");
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [overlays, setOverlays] = useState({
     swaps: false,
     thesis: true,
@@ -79,8 +82,10 @@ export default function PriceChart({ symbol = "PONS", live = false, price = "$0.
         timeVisible: true,
       },
       width: containerRef.current.clientWidth,
-      height: 380,
+      height: containerRef.current.clientHeight || 380,
     });
+
+    chartRef.current = chart;
 
     const series = chart.addSeries(CandlestickSeries, {
       upColor: "#4ade80",
@@ -96,8 +101,11 @@ export default function PriceChart({ symbol = "PONS", live = false, price = "$0.
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (entry) {
-        chart.applyOptions({ width: entry.contentRect.width });
+      if (entry && chartRef.current) {
+        chartRef.current.applyOptions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height || 380,
+        });
       }
     });
 
@@ -106,7 +114,23 @@ export default function PriceChart({ symbol = "PONS", live = false, price = "$0.
     return () => {
       resizeObserver.disconnect();
       chart.remove();
+      chartRef.current = null;
       seriesRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    function syncFullscreenState() {
+      const active = document.fullscreenElement || document.webkitFullscreenElement;
+      setIsFullscreen(active === panelRef.current);
+    }
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    document.addEventListener("webkitfullscreenchange", syncFullscreenState);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      document.removeEventListener("webkitfullscreenchange", syncFullscreenState);
     };
   }, []);
 
@@ -147,11 +171,65 @@ export default function PriceChart({ symbol = "PONS", live = false, price = "$0.
     setOverlays((current) => ({ ...current, [key]: !current[key] }));
   }
 
+  async function toggleFullscreen() {
+    const panel = panelRef.current;
+    if (!panel) {
+      return;
+    }
+
+    const active = document.fullscreenElement || document.webkitFullscreenElement;
+
+    try {
+      if (active === panel) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen();
+        }
+      } else if (panel.requestFullscreen) {
+        await panel.requestFullscreen();
+      } else if (panel.webkitRequestFullscreen) {
+        await panel.webkitRequestFullscreen();
+      }
+    } catch {
+      // Browser blocked fullscreen — ignore.
+    }
+  }
+
   return (
-    <div className="chart-panel">
+    <div ref={panelRef} className={`chart-panel${isFullscreen ? " chart-panel--fullscreen" : ""}`}>
       <div className="chart-header">
         <span className="chart-header__label">{symbol}/USD · Market Cap</span>
-        <span className="chart-header__price num positive">{price}</span>
+        <div className="chart-header__actions">
+          <span className="chart-header__price num positive">{price}</span>
+          <button
+            type="button"
+            className="chart-fullscreen-btn"
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen chart"}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen chart"}
+          >
+            {isFullscreen ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="chart-toolbar">
