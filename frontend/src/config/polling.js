@@ -1,18 +1,22 @@
 /** All API responses cached for 1 hour before revalidation. */
 export const CACHE_TTL_MS = 60 * 60 * 1000;
 
-/** Re-fetch interval matches cache TTL — no call before cache expires. */
-export const LEADERBOARD_REFRESH_MS = CACHE_TTL_MS;
-
 /** Paid token endpoints — no automatic polling; cache handles revalidation. */
 export const TOKEN_REFRESH_MS = null;
 
 export const TICKER_REFRESH_MS = CACHE_TTL_MS;
 export const CHART_REFRESH_MS = CACHE_TTL_MS;
 
+/** Live copy-trader feed — short poll, not cached. */
+export const COPY_TRADER_REFRESH_MS = 5000;
+
+/** Leaderboard/clans refresh often — PnL moves in real time. */
+export const LEADERBOARD_CACHE_MS = 60 * 1000;
+export const LEADERBOARD_REFRESH_MS = LEADERBOARD_CACHE_MS;
+
 export const CACHE_TTL = {
   default: CACHE_TTL_MS,
-  leaderboard: CACHE_TTL_MS,
+  leaderboard: LEADERBOARD_CACHE_MS,
   tokenSearch: CACHE_TTL_MS,
   tokenData: CACHE_TTL_MS,
   thesis: CACHE_TTL_MS,

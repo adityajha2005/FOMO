@@ -16,13 +16,13 @@ import cmd
 import shlex
 import sys
 
+from . import ui
 from .api import ApiError, FomoAPI, dex_pair
 from .config import Config
 from .copytrader import CopyTrader
 from .executor import make_executor
 from .scoring import describe, trade_conviction
 from .sizing import all_sizes
-from . import ui
 
 
 class App:
@@ -39,7 +39,9 @@ class App:
         scores = {r["handle"]: self.bot.analyze(r["handle"], r) for r in rows} if score else None
         ui.leaderboard(rows, window, scores)
         if score and not self.api.key:
-            ui.console.print("[dim]styles are estimated from leaderboard stats only; add FOMO_API_KEY for hit-rate/hold-time.[/]")
+            ui.console.print(
+                "[dim]styles are estimated from leaderboard stats only; add FOMO_API_KEY for hit-rate/hold-time.[/]"
+            )
 
     def trader(self, handle):
         self.bot.follow_set()
@@ -76,13 +78,37 @@ class App:
                     ui.console.print(ui.alert_line(a))
             time.sleep(self.cfg.poll_seconds)
 
-    def copy(self, once=False, live=False):
+    def copy(self, once=False, live=False, monitor=False):
         if live and not self.cfg.live:
             self.cfg.live = True
             self.bot.ex = make_executor(self.cfg)
         if self.cfg.live:
             ui.console.print("[bold red]LIVE MODE: real Solana swaps via Jupiter[/]")
+        if monitor or not live:
+            from .runner import TerminalRunner
+
+            TerminalRunner(self.bot, self.cfg).run(once=once)
+            return
         self.bot.run(once=once)
+
+    def stats(self):
+        from .api import dex_pair
+
+        prices = {}
+        for p in self.store.open_positions():
+            pair = dex_pair(p["chain"], p["address"])
+            if pair:
+                prices[p["id"]] = pair["price"]
+        stats = self.store.portfolio_stats(self.cfg.account_usd, prices)
+        ui.session_stats(stats, self.cfg.account_usd)
+        rows = self.store.open_positions()
+        if rows:
+            ui.positions(rows, prices)
+        recent = self.store.positions(limit=10)
+        closed = [p for p in recent if p["status"] == "closed"]
+        if closed:
+            ui.console.print("\n[bold]Recent closed trades[/]")
+            ui.positions(closed[:10])
 
     def positions(self, all_=False):
         rows = self.store.positions() if all_ else self.store.open_positions()
@@ -132,7 +158,9 @@ class Shell(cmd.Cmd):
 
 
 def parser():
-    p = argparse.ArgumentParser(prog="fomo_cli", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        prog="fomo_cli", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("top")
     s.add_argument("--window", default="all", choices=["all", "24h", "7d", "30d"])
@@ -149,6 +177,7 @@ def parser():
     s.add_argument("--live", action="store_true")
     sub.add_parser("positions").add_argument("--all", action="store_true")
     sub.add_parser("close").add_argument("id")
+    sub.add_parser("stats")
     sub.add_parser("events")
     sub.add_parser("me")
     sub.add_parser("shell")
@@ -170,13 +199,15 @@ def run(argv, app):
     elif a.cmd == "watch":
         app.watch()
     elif a.cmd == "copy":
-        app.copy(a.once, a.live)
+        app.copy(a.once, a.live, monitor=getattr(a, "monitor", True))
     elif a.cmd == "positions":
         app.positions(a.all)
     elif a.cmd == "close":
         app.close(a.id)
     elif a.cmd == "events":
         app.events()
+    elif a.cmd == "stats":
+        app.stats()
     elif a.cmd == "me":
         app.me()
     elif a.cmd == "shell":

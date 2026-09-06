@@ -36,15 +36,27 @@ def ago(ts):
 def leaderboard(rows, window, scores=None):
     t = Table(title=f"FOMO top {len(rows)} ({window})", expand=False)
     for c in ("#", "handle", "pnl", "volume", "trades", "avg size", "followers", "style", "risk", "hit%", "wallet"):
-        t.add_column(c, justify="right" if c in ("#", "pnl", "volume", "trades", "avg size", "followers", "risk", "hit%") else "left")
+        t.add_column(
+            c,
+            justify="right"
+            if c in ("#", "pnl", "volume", "trades", "avg size", "followers", "risk", "hit%")
+            else "left",
+        )
     for r in rows:
         s = (scores or {}).get(r["handle"], {})
         style = s.get("style", "")
         w = (r.get("wallets") or {}).get("solana") or (r.get("wallets") or {}).get("evm") or ""
         t.add_row(
-            str(r.get("rank")), r["handle"], usd(r.get("pnlUsd"), True), usd(r.get("volumeUsd")), str(r.get("trades", "")),
-            usd(r["volumeUsd"] / r["trades"]) if r.get("trades") else "-", f"{r.get('followers', 0):,}",
-            f"[{STYLE_COLOR.get(style, 'white')}]{style}[/]", str(s.get("risk", "")), pct(s.get("hit_rate")) if s else "",
+            str(r.get("rank")),
+            r["handle"],
+            usd(r.get("pnlUsd"), True),
+            usd(r.get("volumeUsd")),
+            str(r.get("trades", "")),
+            usd(r["volumeUsd"] / r["trades"]) if r.get("trades") else "-",
+            f"{r.get('followers', 0):,}",
+            f"[{STYLE_COLOR.get(style, 'white')}]{style}[/]",
+            str(s.get("risk", "")),
+            pct(s.get("hit_rate")) if s else "",
             w[:6] + "…" if w else "",
         )
     console.print(t)
@@ -83,18 +95,29 @@ def theses(rows, handle):
     t.add_column("thesis")
     for r in sorted(rows, key=lambda x: x["ts"] or 0, reverse=True):
         hit = "-" if r["hit"] is None else ("[green]✓[/]" if r["hit"] else "[red]✗[/]")
-        t.add_row(ago(r["ts"]), r["token"], hit, usd(r["pnl"], True) if r["pnl"] is not None else "-", str(r["likes"]), r["text"][:160])
+        t.add_row(
+            ago(r["ts"]),
+            r["token"],
+            hit,
+            usd(r["pnl"], True) if r["pnl"] is not None else "-",
+            str(r["likes"]),
+            r["text"][:160],
+        )
     console.print(t)
 
 
 def sizes(handle, score, all_sizes, chosen, equations=None):
-    t = Table(title=f"position size for copying @{handle} ({score['style']}, risk {score['risk']}, hit {pct(score['hit_rate'])})")
+    t = Table(
+        title=f"position size for copying @{handle} ({score['style']}, risk {score['risk']}, hit {pct(score['hit_rate'])})"
+    )
     t.add_column("formula")
     t.add_column("usd", justify="right")
     t.add_column("computation")
     for name, (usd_v, parts) in all_sizes.items():
         mark = "[bold]▶[/] " if name == chosen else "  "
-        t.add_row(mark + name, usd(usd_v), equations[name] if equations else ", ".join(f"{k}={v}" for k, v in parts.items()))
+        t.add_row(
+            mark + name, usd(usd_v), equations[name] if equations else ", ".join(f"{k}={v}" for k, v in parts.items())
+        )
     if equations:
         t.add_row("  cap", "", equations["cap"])
     console.print(t)
@@ -111,14 +134,45 @@ def positions(rows, prices=None):
         else:
             pnl = p["pnl_usd"]
         t.add_row(
-            str(p["id"]), p["status"], p["token"], p["chain"], p["handle"], p["style"], usd(p["usd_in"]),
-            f"{p['entry_price']:.6g}", f"{now:.6g}" if now else "-", usd(pnl, True), ago(p["opened_at"]), p.get("reason") or "",
+            str(p["id"]),
+            p["status"],
+            p["token"],
+            p["chain"],
+            p["handle"],
+            p["style"],
+            usd(p["usd_in"]),
+            f"{p['entry_price']:.6g}",
+            f"{now:.6g}" if now else "-",
+            usd(pnl, True),
+            ago(p["opened_at"]),
+            p.get("reason") or "",
         )
     console.print(t)
 
 
+def session_stats(stats, account_usd):
+    t = Table(title=f"Portfolio stats (account {usd(account_usd)})", expand=False)
+    t.add_column("metric")
+    t.add_column("value", justify="right")
+    t.add_row("Session runtime", f"{stats['session_hours']:.1f} hours")
+    t.add_row("Total PnL", usd(stats["total_pnl"], True))
+    t.add_row("ROI", f"{stats['roi_pct']:+.2f}%")
+    t.add_row("Realized PnL", usd(stats["realized_pnl"], True))
+    t.add_row("Unrealized PnL", usd(stats["unrealized_pnl"], True))
+    t.add_row("24h PnL", usd(stats["day_pnl"], True))
+    wr = pct(stats["win_rate"]) if stats["win_rate"] is not None else "—"
+    t.add_row("Win rate", f"{wr} ({stats['wins']}W / {stats['losses']}L)")
+    t.add_row("Closed trades", str(stats["closed_trades"]))
+    t.add_row("Open positions", str(stats["open_count"]))
+    t.add_row("Open capital", usd(stats["open_capital"]))
+    t.add_row("Open mark value", usd(stats["open_value"]))
+    console.print(t)
+
+
 def alert_line(a):
-    side = "[green]BUY [/]" if a.get("type") == "buy" else "[red]SELL[/]" if a.get("type") == "sell" else "[cyan]THES[/]"
+    side = (
+        "[green]BUY [/]" if a.get("type") == "buy" else "[red]SELL[/]" if a.get("type") == "sell" else "[cyan]THES[/]"
+    )
     size = f" ${a['usdValue']:,.0f}" if a.get("usdValue") else ""
     trader, token, chain = a.get("trader") or "?", a.get("token") or "?", a.get("chain") or ""
     return f"{ago((a.get('ts') or 0) / 1000):>4} {side} {trader:<18} {token:<12} {chain:<9}{size}"

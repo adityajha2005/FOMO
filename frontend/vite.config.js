@@ -1,11 +1,36 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { getFomoBearer, invalidateFomoBearer } from "./fomoAuth.js";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  let fomoBearer = "";
+
+  async function syncFomoBearer(force = false) {
+    fomoBearer = await getFomoBearer(env, { force });
+    return fomoBearer;
+  }
 
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        name: "fomo-auth",
+        configureServer() {
+          syncFomoBearer().then((token) => {
+            if (token) {
+              console.log("[fomo-auth] bearer ready for prod-api.fomo.family proxy");
+            } else if (env.FOMO_REFRESH_TOKEN || env.FOMO_TOKEN) {
+              console.warn("[fomo-auth] no valid FOMO bearer — clan leaderboard will fall back to estimates");
+            }
+          });
+
+          setInterval(() => {
+            syncFomoBearer().catch(() => {});
+          }, 30 * 60 * 1000);
+        },
+      },
+    ],
     server: {
       port: 5173,
       proxy: {
@@ -35,12 +60,25 @@ export default defineConfig(({ mode }) => {
           rewrite: (path) => path.replace(/^\/api\/fomo/, ""),
           configure: (proxy) => {
             proxy.on("proxyReq", (proxyReq) => {
-              if (env.FOMO_TOKEN) {
-                proxyReq.setHeader("Authorization", `Bearer ${env.FOMO_TOKEN}`);
+              if (fomoBearer) {
+                proxyReq.setHeader("Authorization", `Bearer ${fomoBearer}`);
               }
 
               proxyReq.setHeader("app-language", "en");
               proxyReq.setHeader("x-supported-chains", "1,56,143,4663,8453,1399811149");
+            });
+
+            proxy.on("proxyRes", (proxyRes, req, res) => {
+              if (proxyRes.statusCode !== 401 && proxyRes.statusCode !== 430) {
+                return;
+              }
+
+              if (!env.FOMO_REFRESH_TOKEN) {
+                return;
+              }
+
+              invalidateFomoBearer();
+              syncFomoBearer(true).catch(() => {});
             });
           },
         },

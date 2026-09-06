@@ -45,8 +45,10 @@ class CopyTrader:
         """Score a trader. Costs ~6 credits with a key (trades 1 + theses 5), cached a day. Keyless = leaderboard only."""
         if handle in self.scores:
             return self.scores[handle]
-        entry = entry or self.follow.get(handle) or next(
-            (t for t in self.api.leaderboard("all", 100) if t["handle"] == handle), {"handle": handle}
+        entry = (
+            entry
+            or self.follow.get(handle)
+            or next((t for t in self.api.leaderboard("all", 100) if t["handle"] == handle), {"handle": handle})
         )
         trades, theses = [], []
         if deep and self.api.key:
@@ -83,17 +85,31 @@ class CopyTrader:
         return pair, None
 
     def has_support(self, handle, score, pair, address):
-        """Tape, confluence, or a reliable thesis must back the buy. Returns reason string or None."""
+        """Three entry formulas: (1) hype, (2) confluence, (3) tape/thesis."""
+        vol_5m = float(pair.get("vol_5m") or 0)
+
+        # Formula 1: high volume / hype — $100k+ in 5 minutes → controlled FOMO entry
+        if vol_5m >= self.cfg.hype_vol_5m_usd:
+            return f"formula-1 hype (${vol_5m:,.0f} vol/5m)"
+
+        # Formula 2: confluence — low volume + 3 tracked wallets on same coin
+        handles = {
+            h
+            for h, ts in self.recent_buys.get(address, [])
+            if time.time() - ts < CONFLUENCE_WINDOW_S
+        }
+        if len(handles) >= self.cfg.confluence_min_wallets and vol_5m < self.cfg.low_vol_5m_usd:
+            return f"formula-2 confluence ({len(handles)} wallets: {', '.join(sorted(handles)[:4])})"
+
+        # Formula 3: tape — buy pressure on the chart
         if pair["buys_5m"] > pair["sells_5m"] and pair["buys_1h"] >= pair["sells_1h"]:
-            return "tape"
-        others = {h for h, ts in self.recent_buys.get(address, []) if h != handle and time.time() - ts < CONFLUENCE_WINDOW_S}
-        if others:
-            return f"confluence ({', '.join(sorted(others))})"
+            return "formula-3 tape"
+
         hr = score.get("hit_rate")
         if hr is not None and hr >= self.cfg.min_thesis_hitrate and self.api.key and score["style"] == "Holder":
             try:
                 if self.api.token_theses(handle, address):
-                    return f"thesis (hit-rate {hr:.0%})"
+                    return f"formula-3 thesis (hit-rate {hr:.0%})"
             except ApiError:
                 pass
         return None
@@ -146,12 +162,22 @@ class CopyTrader:
         except (ExecError, Exception) as e:  # noqa: BLE001 - never let one fill kill the loop
             return self.log(f"[error] buy {a.get('token')}: {e}")
         pid = self.store.open_position(
-            handle=handle, token=a.get("token") or pair["symbol"], address=address, chain=chain, network_id=net,
-            style=score["style"], entry_price=fill["price"], qty=fill["qty"], usd_in=fill["usd"],
-            tx=fill.get("tx"), live=int(self.ex.name == "live"),
+            handle=handle,
+            token=a.get("token") or pair["symbol"],
+            address=address,
+            chain=chain,
+            network_id=net,
+            style=score["style"],
+            entry_price=fill["price"],
+            qty=fill["qty"],
+            usd_in=fill["usd"],
+            tx=fill.get("tx"),
+            live=int(self.ex.name == "live"),
         )
         self.store.log("buy", f"#{pid} {a.get('token')} ${usd:.0f} copying {handle} ({score['style']}, {why}) {parts}")
-        self.log(f"BUY #{pid} {a.get('token')} ${usd:.0f} @ {fill['price']:.6g} copying {handle} [{score['style']}, {why}]")
+        self.log(
+            f"BUY #{pid} {a.get('token')} ${usd:.0f} @ {fill['price']:.6g} copying {handle} [{score['style']}, {why}]"
+        )
 
     def _on_followed_sell(self, handle, address):
         for p in self.store.open_positions():
@@ -238,12 +264,16 @@ class CopyTrader:
     def run(self, once=False):
         # ponytail: REST polling of /v2/alerts (keyless = 60s delayed). Swap for wss://api.fomoapi.io/ws/alerts once a key is in play.
         self.follow_set()
-        self.log(f"following {len(self.follow)} traders, executor={self.ex.name}, sizing={self.cfg.sizing}, account=${self.cfg.account_usd:,.0f}")
+        self.log(
+            f"following {len(self.follow)} traders, executor={self.ex.name}, sizing={self.cfg.sizing}, account=${self.cfg.account_usd:,.0f}"
+        )
         last_refresh = time.time()
         while True:
             try:
                 n = self.tick()
-                self.log(f"tick: {n} alerts, {len(self.store.open_positions())} open, day pnl ${self.store.daily_pnl():+.2f}, credits {self.api.credits_spent:g}")
+                self.log(
+                    f"tick: {n} alerts, {len(self.store.open_positions())} open, day pnl ${self.store.daily_pnl():+.2f}, credits {self.api.credits_spent:g}"
+                )
             except (ApiError, OSError) as e:
                 self.log(f"[warn] {e}")
             if once:

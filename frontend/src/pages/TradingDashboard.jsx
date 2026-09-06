@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import FooterTicker from "../components/FooterTicker.jsx";
 import HoldersTable from "../components/HoldersTable.jsx";
 import LeftSidebar from "../components/LeftSidebar.jsx";
@@ -11,6 +11,7 @@ import { CLANS, HOLDERS, LEADERBOARD } from "../data/mockData.js";
 import { useFomoAlerts } from "../hooks/useFomoAlerts.js";
 import { api } from "../services/api.js";
 import {
+  clearLeaderboardCache,
   getLeaderboard,
   getTokenBundle,
   getTokenThesesCached,
@@ -25,36 +26,54 @@ import {
 const DEFAULT_TOKEN = import.meta.env.VITE_DEFAULT_TOKEN || "PONS";
 
 const FALLBACK_TOKEN_STATS = {
-  marketCap: "$934.1M",
-  price: "$0.934",
-  change: "+12.98%",
+  marketCap: "$922.2M",
+  price: "$0.922",
+  change: "+1.98%",
   changePositive: true,
-  volume: "$145.7M",
-  liquidity: "$6.7M",
-  holderCount: 28800,
+  volume: "$143.6M",
+  liquidity: "$7.1M",
+  holderCount: 28900,
+  thesisCount: 6574,
   address: "0x39dbed3a2bd333467115de45665cc57f813c4571",
   performance: {
     "5M": "+0.8%",
     "1H": "+2.4%",
     "4H": "+6.1%",
-    "1D": "+12.98%",
+    "1D": "+1.98%",
   },
-  sentiment: { buys: 1204, sells: 566 },
+  sentiment: {
+    buys: 2427,
+    sells: 3727,
+    buyers: 1528,
+    sellers: 1806,
+    buyVol: 39,
+    sellVol: 61,
+  },
+};
+
+const TEAM_ROW = {
+  name: "Team holdings",
+  handle: "",
+  isTeam: true,
+  position: "—",
+  pnlPct: "—",
+  pnlUsd: "—",
+  avgEntry: "—",
+  thesis: "",
 };
 
 export default function TradingDashboard() {
   const [activeTab, setActiveTab] = useState("Leaderboard");
+  const [leaderboardWindow, setLeaderboardWindow] = useState("24h");
   const [tradeSide, setTradeSide] = useState("buy");
   const [holdersTab, setHoldersTab] = useState("holders");
   const [currentCoin, setCurrentCoin] = useState(null);
   const [portfolioUsd, setPortfolioUsd] = useState(0);
-  const [apiOnline, setApiOnline] = useState(false);
   const [clans, setClans] = useState(CLANS);
   const [leaderboard, setLeaderboard] = useState(LEADERBOARD);
   const [leaderboardLoading, setLeaderboardLoading] = useState(LIVE_API_ENABLED);
   const [leaderboardError, setLeaderboardError] = useState(null);
   const [leaderboardLive, setLeaderboardLive] = useState(false);
-  const [liveSource, setLiveSource] = useState(null);
   const [tokenStats, setTokenStats] = useState(FALLBACK_TOKEN_STATS);
   const [holderRows, setHolderRows] = useState(HOLDERS);
   const [thesisRows, setThesisRows] = useState([]);
@@ -67,6 +86,8 @@ export default function TradingDashboard() {
   const [thesisError, setThesisError] = useState(null);
   const [holdersShown, setHoldersShown] = useState(null);
   const [allClans, setAllClans] = useState(CLANS);
+  const [clanSource, setClanSource] = useState("estimated");
+  const [clanTokenError, setClanTokenError] = useState(null);
   const [actionMessage, setActionMessage] = useState(null);
 
   const fomoSymbol = DEFAULT_TOKEN;
@@ -81,21 +102,26 @@ export default function TradingDashboard() {
       return;
     }
     try {
-      const { traders, clans: liveClans, source } = await getLeaderboard({ window: "7d", limit: 30 });
+      const { traders, clans: liveClans, clanSource: liveClanSource, clanTokenError: tokenErr } =
+        await getLeaderboard({
+        window: leaderboardWindow,
+        limit: 30,
+      });
 
       setLeaderboard(traders);
-      setClans(liveClans.slice(0, 4));
+      setClans(liveClans.slice(0, 6));
       setAllClans(liveClans);
+      setClanSource(liveClanSource || "estimated");
+      setClanTokenError(tokenErr ?? null);
       setLeaderboardLive(true);
       setLeaderboardError(null);
-      setLiveSource(source);
     } catch (error) {
       setLeaderboardLive(false);
-      setLeaderboardError(error.message || "Could not load live leaderboard");
+      setLeaderboardError(error.message || "Could not load leaderboard");
     } finally {
       setLeaderboardLoading(false);
     }
-  }, []);
+  }, [leaderboardWindow]);
 
   const loadTokenData = useCallback(async () => {
     if (!LIVE_API_ENABLED) {
@@ -118,7 +144,7 @@ export default function TradingDashboard() {
     } catch (error) {
       setTokenLive(false);
       setTokenStats(FALLBACK_TOKEN_STATS);
-      setHolderRows(HOLDERS);
+      setHolderRows(HOLDERS.filter((row) => !row.isTeam));
       setTokenError(error.message || "Could not load token data");
     } finally {
       setTokenLoading(false);
@@ -126,11 +152,7 @@ export default function TradingDashboard() {
   }, [fomoSymbol]);
 
   const loadThesisData = useCallback(async () => {
-    if (!LIVE_API_ENABLED) {
-      return;
-    }
-
-    if (thesisLoaded || thesisLoading) {
+    if (!LIVE_API_ENABLED || thesisLoaded || thesisLoading) {
       return;
     }
 
@@ -141,6 +163,7 @@ export default function TradingDashboard() {
       const rows = await getTokenThesesCached(fomoSymbol);
       setThesisRows(rows);
       setThesisLoaded(true);
+      setTokenStats((current) => ({ ...current, thesisCount: rows.length || current.thesisCount }));
     } catch (error) {
       setThesisRows([]);
       setThesisError(error.message || "Could not load thesis data");
@@ -152,10 +175,12 @@ export default function TradingDashboard() {
   useEffect(() => {
     if (!LIVE_API_ENABLED) {
       setLeaderboardLoading(false);
-      setHoldersShown(HOLDERS.length);
+      setHoldersShown(HOLDERS.length - 1);
       return undefined;
     }
 
+    setLeaderboardLoading(true);
+    clearLeaderboardCache();
     loadLeaderboard();
     if (!LEADERBOARD_REFRESH_MS) {
       return undefined;
@@ -195,15 +220,12 @@ export default function TradingDashboard() {
         }
 
         setCurrentCoin(coin);
-        setApiOnline(true);
 
         if (Array.isArray(valueHistory) && valueHistory.length > 0) {
           setPortfolioUsd(Number(valueHistory.at(-1).usd) || 0);
         }
       } catch {
-        if (active) {
-          setApiOnline(false);
-        }
+        // bot optional
       }
     }
 
@@ -214,7 +236,15 @@ export default function TradingDashboard() {
     };
   }, []);
 
-  const tableRows = holdersTab === "thesis" ? thesisRows : holderRows;
+  const displayHolders = useMemo(() => {
+    if (holdersTab !== "holders") {
+      return holdersTab === "thesis" ? thesisRows : [];
+    }
+    const rows = holderRows.filter((row) => !row.isTeam);
+    return [TEAM_ROW, ...rows];
+  }, [holdersTab, holderRows, thesisRows]);
+
+  const tableRows = holdersTab === "thesis" ? thesisRows : holdersTab === "holders" ? displayHolders : [];
   const tableLoading = holdersTab === "thesis" ? thesisLoading : tokenLoading;
 
   const showActionMessage = useCallback((message) => {
@@ -225,15 +255,6 @@ export default function TradingDashboard() {
   async function handleCopyAddress() {
     const copied = await copyText(tokenStats.address);
     showActionMessage(copied ? "Contract address copied." : "Could not copy address.");
-  }
-
-  async function handleShareToken() {
-    const shared = await sharePage({
-      title: `${fomoSymbol} on fomo`,
-      text: `Check out ${fomoSymbol} on fomo.family`,
-      url: fomoTokenUrl(fomoSymbol),
-    });
-    showActionMessage(shared ? "Share link copied." : "Share cancelled.");
   }
 
   return (
@@ -253,7 +274,10 @@ export default function TradingDashboard() {
           alertsDelaySeconds={alertsDelaySeconds}
           loading={leaderboardLoading}
           error={leaderboardError}
-          liveSource={liveSource}
+          leaderboardWindow={leaderboardWindow}
+          onWindowChange={setLeaderboardWindow}
+          clanSource={clanSource}
+          clanTokenError={clanTokenError}
         />
 
         <main className="main-panel">
@@ -267,55 +291,51 @@ export default function TradingDashboard() {
               <div>
                 <div className="token-header__title">
                   <h1>{fomoSymbol}</h1>
-                  <span className="token-tag">Spot</span>
-                  {LIVE_API_ENABLED && tokenLive ? (
-                    <span className="status-chip status-chip--live">Market data live</span>
-                  ) : (
-                    <span className="status-chip">UI preview</span>
-                  )}
                 </div>
-                <div className="token-header__meta">
-                  {tradeSymbol !== fomoSymbol ? (
-                    <span className="token-meta-item">Bot pair: {tradeSymbol}/USDT</span>
-                  ) : null}
-                  {!apiOnline ? <span className="token-meta-item token-meta-item--warn">Bot offline</span> : null}
-                  {tokenStats.address ? (
-                    <span className="token-meta-item num">{tokenStats.address.slice(0, 6)}...{tokenStats.address.slice(-4)}</span>
-                  ) : null}
-                </div>
-                <div className="token-header__links">
-                  <button type="button" onClick={handleCopyAddress} disabled={!tokenStats.address}>
-                    Copy contract
-                  </button>
-                  <button type="button" onClick={handleShareToken}>
-                    Share
-                  </button>
-                  <a href={fomoTokenUrl(fomoSymbol)} target="_blank" rel="noreferrer">
-                    Token page
+                <div className="token-header__actions">
+                  <a className="icon-btn" href={fomoTokenUrl(fomoSymbol)} target="_blank" rel="noreferrer" title="Website">
+                    ↗
                   </a>
-                  <a href={xSearchUrl(fomoSymbol)} target="_blank" rel="noreferrer">
-                    Research
+                  <a className="icon-btn" href={xSearchUrl(`$${fomoSymbol}`)} target="_blank" rel="noreferrer" title="X">
+                    𝕏
                   </a>
+                  <button type="button" className="icon-btn" onClick={handleCopyAddress} title="Copy contract">
+                    ⧉
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={() => sharePage({ title: fomoSymbol, url: fomoTokenUrl(fomoSymbol) })}
+                    title="Favorite"
+                  >
+                    ☆
+                  </button>
                 </div>
               </div>
             </div>
 
             <div className="token-stats">
               <Stat label="Market Cap" value={tokenStats.marketCap} />
-              <Stat label="Last Price" value={tokenStats.price} />
+              <Stat label="Price" value={tokenStats.price} />
               <Stat label="24H Change" value={tokenStats.change} positive={tokenStats.changePositive} />
-              <Stat label="24H Volume" value={tokenStats.volume} />
+              <Stat label="24H Vol" value={tokenStats.volume} />
               {tokenStats.liquidity ? <Stat label="Liquidity" value={tokenStats.liquidity} /> : null}
             </div>
           </section>
 
-          <PriceChart symbol={tradeSymbol} live={LIVE_API_ENABLED && (chartLive || leaderboardLive)} />
+          <PriceChart
+            symbol={fomoSymbol}
+            live={LIVE_API_ENABLED && (chartLive || leaderboardLive)}
+            price={tokenStats.price}
+          />
+
           <HoldersTable
             rows={tableRows}
             symbol={fomoSymbol}
             activeTab={holdersTab}
             onTabChange={setHoldersTab}
             holderCount={tokenStats.holderCount}
+            thesisCount={tokenStats.thesisCount}
             holdersShown={holdersShown}
             loading={tableLoading}
             tokenLive={tokenLive}
@@ -332,7 +352,6 @@ export default function TradingDashboard() {
           side={tradeSide}
           onSideChange={setTradeSide}
           tokenStats={tokenStats}
-          botOnline={apiOnline}
         />
       </div>
 

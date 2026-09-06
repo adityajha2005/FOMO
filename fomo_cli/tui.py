@@ -88,9 +88,18 @@ class TraderScreen(Screen):
         t.clear()
         for r in sorted(s["rows"], key=lambda x: x["ts"] or 0, reverse=True):
             hit = Text("-") if r["hit"] is None else Text("✓", style="green") if r["hit"] else Text("✗", style="red")
-            t.add_row(ago(r["ts"]), r["token"], hit, money(r["pnl"], True) if r["pnl"] is not None else "-", str(r["likes"]), r["text"].replace("\n", " ")[:140])
+            t.add_row(
+                ago(r["ts"]),
+                r["token"],
+                hit,
+                money(r["pnl"], True) if r["pnl"] is not None else "-",
+                str(r["likes"]),
+                r["text"].replace("\n", " ")[:140],
+            )
         if not s["rows"]:
-            t.add_row("", "", "", "", "", "no theses" if self.st.api.key else "set fomo_api_key in fomo_cli.cfg for theses")
+            t.add_row(
+                "", "", "", "", "", "no theses" if self.st.api.key else "set fomo_api_key in fomo_cli.cfg for theses"
+            )
         self.score = s
         self.action_sizes()
 
@@ -101,7 +110,9 @@ class TraderScreen(Screen):
         conv = trade_conviction(s.get("median_size"), s)
         sizes = all_sizes(self.st.cfg, s, conv)
         eq = explain_sizes(self.st.cfg, s, conv, sizes)
-        lines = [f"[bold]position size on ${self.st.cfg.account_usd:,.0f} account[/]  (▶ active: {self.st.cfg.sizing}, style mult {STYLE_MULT[s['style']]}, R {s['risk']}, C {s['conviction']})   [dim]f = all formulas[/]"]
+        lines = [
+            f"[bold]position size on ${self.st.cfg.account_usd:,.0f} account[/]  (▶ active: {self.st.cfg.sizing}, style mult {STYLE_MULT[s['style']]}, R {s['risk']}, C {s['conviction']})   [dim]f = all formulas[/]"
+        ]
         for name, (usd, _) in sizes.items():
             mark = "▶" if name == self.st.cfg.sizing else " "
             lines.append(f"{mark} {name:<11} [bold]{money(usd):>8}[/]   [dim]{eq[name]}[/]")
@@ -176,9 +187,15 @@ class Dashboard(App):
             s = self.st.bot.scores.get(r["handle"], {})
             style = s.get("style", "")
             b.add_row(
-                str(r["rank"]), r["handle"], money(r.get("pnlUsd"), True), money(r.get("volumeUsd")), str(r.get("trades", "")),
+                str(r["rank"]),
+                r["handle"],
+                money(r.get("pnlUsd"), True),
+                money(r.get("volumeUsd")),
+                str(r.get("trades", "")),
                 money(r["volumeUsd"] / r["trades"]) if r.get("trades") else "-",
-                Text(style, style=STYLE_COLOR.get(style, "")), str(s.get("risk", "")), pct(s.get("hit_rate")) if s else "",
+                Text(style, style=STYLE_COLOR.get(style, "")),
+                str(s.get("risk", "")),
+                pct(s.get("hit_rate")) if s else "",
                 key=r["handle"],
             )
         self.sub_title = f"leaderboard {window}"
@@ -190,7 +207,17 @@ class Dashboard(App):
         for pos in self.st.store.open_positions():
             pair = dex_pair(pos["chain"], pos["address"])
             pnl = pos["qty"] * pair["price"] - pos["usd_in"] if pair and pair["price"] else None
-            p.add_row(str(pos["id"]), pos["token"], pos["chain"], pos["handle"], pos["style"], money(pos["usd_in"]), money(pnl, True), ago(pos["opened_at"]), key=str(pos["id"]))
+            p.add_row(
+                str(pos["id"]),
+                pos["token"],
+                pos["chain"],
+                pos["handle"],
+                pos["style"],
+                money(pos["usd_in"]),
+                money(pnl, True),
+                ago(pos["opened_at"]),
+                key=str(pos["id"]),
+            )
         self.update_status()
 
     def update_status(self):
@@ -283,7 +310,9 @@ class Dashboard(App):
     def action_copy(self):
         self.copying = not self.copying
         if self.copying:
-            self.log_line(f"[green]copy loop started[/] ({self.st.bot.ex.name}, {self.st.cfg.sizing}, ${self.st.cfg.account_usd:,.0f})")
+            self.log_line(
+                f"[green]copy loop started[/] ({self.st.bot.ex.name}, {self.st.cfg.sizing}, ${self.st.cfg.account_usd:,.0f})"
+            )
             threading.Thread(target=self.copy_loop, daemon=True).start()
         else:
             self.log_line("[yellow]copy loop stopping[/]")

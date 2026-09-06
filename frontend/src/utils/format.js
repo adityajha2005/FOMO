@@ -14,6 +14,22 @@ export function formatPnl(value) {
   return `${sign}$${abs.toFixed(2)}`;
 }
 
+/** Full-precision PnL like fomo.family trader leaderboard (+$5,859,358.37). */
+export function formatLeaderboardPnl(value) {
+  const amount = Number(value) || 0;
+  const sign = amount >= 0 ? "+" : "-";
+  const abs = Math.abs(amount);
+
+  if (abs >= 1_000) {
+    return `${sign}$${abs.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
+  return `${sign}$${abs.toFixed(2)}`;
+}
+
 export function formatUsd(value, { compact = false, decimals = 2 } = {}) {
   const amount = Number(value) || 0;
 

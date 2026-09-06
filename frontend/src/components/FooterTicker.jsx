@@ -7,7 +7,6 @@ import { TICKER } from "../data/mockData.js";
 
 export default function FooterTicker() {
   const [items, setItems] = useState(TICKER);
-  const [live, setLive] = useState(false);
 
   useEffect(() => {
     if (!LIVE_API_ENABLED) {
@@ -21,12 +20,9 @@ export default function FooterTicker() {
         const next = await getMarketTicker();
         if (active) {
           setItems(next);
-          setLive(true);
         }
       } catch {
-        if (active) {
-          setLive(false);
-        }
+        // keep mock ticker
       }
     }
 
@@ -51,20 +47,31 @@ export default function FooterTicker() {
             rel="noreferrer"
           >
             <strong>{item.symbol}</strong>
-            <span>{item.price}</span>
-            <span className={item.up ? "positive" : "negative"}>{item.change}</span>
+            <span className="num">{item.price}</span>
+            <span className={`num ${item.up ? "positive" : "negative"}`}>{item.change}</span>
           </a>
         ))}
       </div>
       <div className="footer-ticker__meta">
-        <span className={`status-dot ${live ? "status-dot--live" : ""}`} />
-        <span>{live ? "Market feed" : "Feed offline"}</span>
+        <span className="status-dot" />
+        <span>Minor issues</span>
         <a href="https://fomo.family/privacy" target="_blank" rel="noreferrer">
           Privacy
         </a>
         <a href="https://fomo.family/terms" target="_blank" rel="noreferrer">
           Terms
         </a>
+        <a href="https://fomo.family/help" target="_blank" rel="noreferrer">
+          Help
+        </a>
+        <div className="footer-ticker__social">
+          <a href="https://discord.gg/fomo" target="_blank" rel="noreferrer" aria-label="Discord">
+            ◆
+          </a>
+          <a href="https://x.com/fomodotfamily" target="_blank" rel="noreferrer" aria-label="X">
+            𝕏
+          </a>
+        </div>
       </div>
     </footer>
   );

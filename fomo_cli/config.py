@@ -24,6 +24,9 @@ class Config:
     max_liquidity_share_pct: float = 1.0  # never be >1% of pool liquidity
     max_top10_holders_pct: float = 45.0
     min_thesis_hitrate: float = 0.55
+    hype_vol_5m_usd: float = 100_000.0  # formula 1: copy immediately on $100k+ vol in 5m
+    confluence_min_wallets: int = 3  # formula 2: 3 tracked wallets on same coin
+    low_vol_5m_usd: float = 100_000.0  # confluence only when 5m vol is below hype threshold
     chains: tuple = ("solana", "robinhood", "base", "bsc", "ethereum")
     poll_seconds: int = 20
     live: bool = False

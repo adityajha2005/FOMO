@@ -5,6 +5,13 @@ import { getTrendingTokens, mapTrendingToken } from "../services/fomoApi.js";
 import { TRENDING_TOKENS } from "../data/mockData.js";
 import { LIVE_API_ENABLED } from "../config/api.js";
 
+const WINDOWS = [
+  { id: "24h", label: "24H" },
+  { id: "7d", label: "7D" },
+  { id: "30d", label: "30D" },
+  { id: "all", label: "ALL" },
+];
+
 function Avatar({ url, initials, className = "avatar avatar--sm" }) {
   if (url) {
     return (
@@ -30,15 +37,15 @@ export default function LeftSidebar({
   alertsDelaySeconds = null,
   loading = false,
   error = null,
-  liveSource = null,
+  leaderboardWindow = "24h",
+  onWindowChange,
+  clanSource = "fomo.family",
+  clanTokenError = null,
 }) {
-  const [showAllClans, setShowAllClans] = useState(false);
-  const [showAllLeaderboard, setShowAllLeaderboard] = useState(false);
   const [trendingTokens, setTrendingTokens] = useState([]);
   const [tokensLoading, setTokensLoading] = useState(false);
 
-  const visibleClans = showAllClans ? allClans : clans;
-  const visibleLeaderboard = showAllLeaderboard ? leaderboard : leaderboard.slice(0, 10);
+  const displayClans = (allClans.length > 0 ? allClans : clans).slice(0, 6);
 
   useEffect(() => {
     if (activeTab !== "Tokens") {
@@ -82,15 +89,7 @@ export default function LeftSidebar({
 
   function renderAlerts() {
     return (
-      <section className="sidebar-section sidebar-section--grow">
-        <div className="sidebar-section__header">
-          <h3>Activity feed</h3>
-          <span className={`status-chip ${alertsConnected ? "status-chip--live" : ""}`}>
-            {alertsConnected ? "Live" : "Connecting"}
-            {alertsDelaySeconds ? ` · ${alertsDelaySeconds}s` : ""}
-          </span>
-        </div>
-
+      <section className="sidebar-section">
         <div className="alerts-list">
           {alerts.length === 0 ? (
             <p className="sidebar-status">Waiting for market activity...</p>
@@ -109,6 +108,7 @@ export default function LeftSidebar({
                   <strong>{alert.text || `${alert.trader} ${alert.type} ${alert.token}`}</strong>
                   <span>
                     {alert.trader} · {alert.token} · {formatAlertTime(alert.ts)}
+                    {alertsDelaySeconds ? ` · ${alertsDelaySeconds}s delay` : ""}
                   </span>
                 </div>
               </button>
@@ -134,116 +134,144 @@ export default function LeftSidebar({
         ))}
       </nav>
 
-      {activeTab === "Alerts" || activeTab === "Feed" ? renderAlerts() : null}
+      <div className="sidebar-scroll">
+        {activeTab === "Alerts" || activeTab === "Feed" ? renderAlerts() : null}
 
-      {activeTab === "Tokens" ? (
-        <section className="sidebar-section sidebar-section--grow">
-          <div className="sidebar-section__header">
-            <h3>Trending</h3>
-            <a className="link-btn" href="https://fomo.family" target="_blank" rel="noreferrer">
-              Market
-            </a>
-          </div>
-
-          <div className="data-list">
-            {tokensLoading ? <p className="sidebar-status">Loading market data...</p> : null}
-            {!tokensLoading && trendingTokens.length === 0 ? (
-              <p className="sidebar-status">Trending data unavailable.</p>
-            ) : null}
+        {activeTab === "Tokens" ? (
+          <section className="sidebar-section">
+            <div className="sidebar-section__header">
+              <h3>Trending</h3>
+            </div>
+            {tokensLoading ? <p className="sidebar-status">Loading...</p> : null}
             {trendingTokens.map((token) => (
               <a
                 key={token.address || token.symbol}
-                className="data-list__row data-list__row--link"
+                className="token-list-row"
                 href={`https://fomo.family/token/${encodeURIComponent(token.symbol)}`}
                 target="_blank"
                 rel="noreferrer"
               >
-                <div className="data-list__primary">
+                <div>
                   <strong>{token.symbol}</strong>
-                  <span>{token.name}</span>
+                  <div className="subtle">{token.name}</div>
                 </div>
-                <div className="data-list__metrics">
-                  <span className="num">{token.price}</span>
-                  <span className={`num ${token.changePositive ? "positive" : "negative"}`}>{token.change}</span>
+                <div style={{ textAlign: "right" }}>
+                  <div className="num">{token.price}</div>
+                  <div className={`num ${token.changePositive ? "positive" : "negative"}`}>{token.change}</div>
                 </div>
               </a>
             ))}
-          </div>
-        </section>
-      ) : null}
-
-      {activeTab === "Leaderboard" ? (
-        <>
-          <section className="sidebar-section">
-            <div className="sidebar-section__header">
-              <h3>Clans</h3>
-              <button type="button" className="link-btn" onClick={() => setShowAllClans((current) => !current)}>
-                {showAllClans ? "Less" : "All"}
-              </button>
-            </div>
-
-            {error ? <p className="sidebar-status sidebar-status--error">{error}</p> : null}
-            {liveSource ? <p className="sidebar-status">Source: {liveSource}</p> : null}
-
-            <div className="data-list">
-              {loading && visibleClans.length === 0
-                ? Array.from({ length: 4 }, (_, index) => (
-                    <div key={index} className="data-list__row data-list__row--loading" />
-                  ))
-                : visibleClans.map((clan) => (
-                    <button
-                      key={clan.id || clan.name}
-                      type="button"
-                      className="data-list__row data-list__row--button"
-                      onClick={() => openExternal("https://fomo.family/clans")}
-                    >
-                      <div className="data-list__primary">
-                        <strong>{clan.name}</strong>
-                        <span>{clan.members} members</span>
-                      </div>
-                      <span className={`num ${clan.pnlRaw >= 0 ? "positive" : "negative"}`}>{clan.pnl}</span>
-                    </button>
-                  ))}
-            </div>
           </section>
+        ) : null}
 
-          <section className="sidebar-section sidebar-section--grow">
-            <div className="sidebar-section__header">
-              <h3>Top traders</h3>
-              <button
-                type="button"
-                className="link-btn"
-                onClick={() => setShowAllLeaderboard((current) => !current)}
-              >
-                {showAllLeaderboard ? "Less" : "All"}
-              </button>
-            </div>
+        {activeTab === "Leaderboard" ? (
+          <>
+            <section className="sidebar-section">
+              <div className="sidebar-section__header">
+                <h3>
+                  Clans
+                  <span className="badge-new">New</span>
+                </h3>
+                {clanSource === "estimated" ? (
+                  <span className="sidebar-section__hint sidebar-section__hint--warn">
+                    {clanTokenError === "expired"
+                      ? "FOMO_TOKEN expired — copy a fresh one from fomo.family DevTools → Network"
+                      : "Add FOMO_TOKEN to frontend/.env for live clan data (fomoapi key alone is not enough)"}
+                  </span>
+                ) : null}
+              </div>
 
-            <div className="data-list data-list--ranked">
-              {loading && visibleLeaderboard.length === 0 ? (
-                <p className="sidebar-status">Loading rankings...</p>
-              ) : null}
+              {error ? <p className="sidebar-status sidebar-status--error">{error}</p> : null}
 
-              {visibleLeaderboard.map((entry) => (
-                <button
-                  key={entry.id || entry.rank}
-                  type="button"
-                  className="data-list__row data-list__row--button data-list__row--ranked"
-                  onClick={() => openTrader(entry.handle || entry.name)}
-                >
-                  <span className="data-list__rank num">{entry.rank}</span>
-                  <Avatar url={entry.avatarUrl} initials={entry.initials} />
-                  <div className="data-list__primary">
-                    <strong>{entry.name}</strong>
-                    <span>{entry.handle}</span>
-                  </div>
-                  <span className={`num ${entry.pnlRaw >= 0 ? "positive" : "negative"}`}>{entry.pnl}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        </>
-      ) : null}
+              <div className="clan-grid">
+                {loading && displayClans.length === 0
+                  ? Array.from({ length: 4 }, (_, index) => (
+                      <div key={index} className="clan-card" style={{ opacity: 0.4 }} />
+                    ))
+                  : displayClans.map((clan) => (
+                      <button
+                        key={clan.id || clan.name}
+                        type="button"
+                        className="clan-card"
+                        onClick={() => openExternal("https://fomo.family/clans")}
+                      >
+                        <div className="clan-card__top">
+                          <div className="clan-card__avatar" style={{ background: clan.color || "var(--bg-hover)" }}>
+                            {clan.avatarUrl ? <img src={clan.avatarUrl} alt="" /> : clan.initials || clan.name.slice(0, 2)}
+                          </div>
+                          <span className="clan-card__name">{clan.name}</span>
+                        </div>
+                        <div className="clan-card__meta">
+                          <span className="clan-card__members">{clan.members} members</span>
+                          <span className={`clan-card__pnl num ${clan.pnlRaw >= 0 ? "positive" : "negative"}`}>
+                            {clan.pnl}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+              </div>
+            </section>
+
+            <section className="sidebar-section">
+              <div className="window-filters">
+                {WINDOWS.map((window) => (
+                  <button
+                    key={window.id}
+                    type="button"
+                    className={leaderboardWindow === window.id ? "window-filters__btn active" : "window-filters__btn"}
+                    onClick={() => onWindowChange?.(window.id)}
+                  >
+                    {window.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="leaderboard-rank-row">
+                <span>Your rank</span>
+                <span>—</span>
+              </div>
+
+              <div className="sidebar-section__header">
+                <h3>PnL</h3>
+              </div>
+
+              <div className="leaderboard-list">
+                {loading && leaderboard.length === 0 ? (
+                  <p className="sidebar-status">Loading rankings...</p>
+                ) : null}
+
+                {leaderboard.map((entry) => (
+                  <button
+                    key={entry.id || entry.rank}
+                    type="button"
+                    className="leaderboard-row"
+                    onClick={() => openTrader(entry.handle || entry.name)}
+                  >
+                    <span className="leaderboard-row__rank num">{entry.rank}</span>
+                    <Avatar url={entry.avatarUrl} initials={entry.initials} />
+                    <div className="leaderboard-row__info">
+                      <div className="leaderboard-row__name">{entry.name}</div>
+                      <div className="leaderboard-row__handle">{entry.handle}</div>
+                    </div>
+                    <span className={`leaderboard-row__pnl num ${entry.pnlRaw >= 0 ? "positive" : "negative"}`}>
+                      {entry.pnl}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </>
+        ) : null}
+      </div>
+
+      <div className="sidebar-footer">
+        <button type="button" className="sidebar-footer__btn">
+          Split bottom
+        </button>
+        <button type="button" className="sidebar-footer__btn">
+          Split right
+        </button>
+      </div>
     </aside>
   );
 }

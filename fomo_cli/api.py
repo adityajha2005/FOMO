@@ -66,7 +66,9 @@ class FomoAPI:
 
     # ---- keyless ----
     def leaderboard(self, window="all", limit=30):
-        return self.get(f"/v2/leaderboard/{window}", {"limit": limit}, ttl=self.cfg.cache_ttl_leaderboard).get("traders", [])
+        return self.get(f"/v2/leaderboard/{window}", {"limit": limit}, ttl=self.cfg.cache_ttl_leaderboard).get(
+            "traders", []
+        )
 
     def alerts(self, limit=50, since=None, type_=None):
         return self.get("/v2/alerts", {"limit": limit, "since": since, "type": type_}).get("alerts", [])
@@ -124,6 +126,7 @@ def dex_pair(chain, address):
         "buys_1h": (tx.get("h1") or {}).get("buys", 0),
         "sells_1h": (tx.get("h1") or {}).get("sells", 0),
         "vol_1h": float((p.get("volume") or {}).get("h1") or 0),
+        "vol_5m": float((p.get("volume") or {}).get("m5") or 0),
         "url": p.get("url"),
     }
 

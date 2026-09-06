@@ -74,8 +74,13 @@ def thesis_rows(theses):
         tok = th.get("token") or {}
         rows.append(
             {
-                "token": th.get("symbol") or th.get("tokenSymbol") or (tok.get("symbol") if isinstance(tok, dict) else tok) or "?",
-                "address": th.get("tokenAddress") or th.get("address") or (tok.get("address") if isinstance(tok, dict) else None),
+                "token": th.get("symbol")
+                or th.get("tokenSymbol")
+                or (tok.get("symbol") if isinstance(tok, dict) else tok)
+                or "?",
+                "address": th.get("tokenAddress")
+                or th.get("address")
+                or (tok.get("address") if isinstance(tok, dict) else None),
                 "text": (th.get("text") or th.get("thesis") or "").strip(),
                 "likes": int(_num(th, "likes", default=0)),
                 "equity": _num(th, "equity", "equityUsd"),

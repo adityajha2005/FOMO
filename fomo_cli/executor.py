@@ -86,12 +86,13 @@ class JupiterExecutor:
         tx = VersionedTransaction.from_bytes(raw)
         sig = self.kp.sign_message(to_bytes_versioned(tx.message))
         signed = VersionedTransaction.populate(tx.message, [sig])
-        return self._rpc("sendTransaction", [base64.b64encode(bytes(signed)).decode(), {"encoding": "base64", "skipPreflight": False, "maxRetries": 3}])
+        return self._rpc(
+            "sendTransaction",
+            [base64.b64encode(bytes(signed)).decode(), {"encoding": "base64", "skipPreflight": False, "maxRetries": 3}],
+        )
 
     def token_balance(self, mint):
-        res = self._rpc(
-            "getTokenAccountsByOwner", [str(self.kp.pubkey()), {"mint": mint}, {"encoding": "jsonParsed"}]
-        )
+        res = self._rpc("getTokenAccountsByOwner", [str(self.kp.pubkey()), {"mint": mint}, {"encoding": "jsonParsed"}])
         best = (0, 0)
         for acc in res.get("value", []):
             amt = acc["account"]["data"]["parsed"]["info"]["tokenAmount"]

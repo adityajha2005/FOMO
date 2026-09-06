@@ -1,6 +1,6 @@
-import re
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
@@ -158,10 +158,7 @@ def fomo_leaderboard():
 
     window = request.args.get("window", "7d")
     limit = request.args.get("limit", "50")
-    url = (
-        "https://prod-api.fomo.family/v2/clans/leaderboard"
-        f"?window={window}&limit={limit}"
-    )
+    url = "https://prod-api.fomo.family/v2/clans/leaderboard" f"?window={window}&limit={limit}"
 
     req = urllib.request.Request(
         url,
@@ -213,6 +210,59 @@ def fomoapi_proxy(subpath):
     except urllib.error.URLError as exc:
         logger.error(f"FOMO API network error: {exc.reason}")
         return jsonify({"error": "Could not reach FOMO API"}), 502
+
+
+@app.route("/api/copy-trader")
+def copy_trader_snapshot():
+    try:
+        from fomo_cli.web import snapshot
+
+        limit = request.args.get("limit", 40, type=int)
+        return jsonify(snapshot(events_limit=limit))
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"copy-trader snapshot failed: {exc}")
+        return jsonify({"error": str(exc), "mode": "paper", "stats": None, "events": [], "open_positions": []}), 500
+
+
+@app.route("/api/copy-trader/buy", methods=["POST"])
+def copy_trader_buy():
+    try:
+        from fomo_cli.web import manual_buy
+
+        data = request.get_json(force=True) or {}
+        result = manual_buy(
+            token=data.get("token"),
+            address=data.get("address"),
+            usd=data.get("usd"),
+            chain=data.get("chain"),
+            network_id=data.get("network_id"),
+        )
+        return jsonify(result)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"copy-trader buy failed: {exc}")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.route("/api/copy-trader/sell", methods=["POST"])
+def copy_trader_sell():
+    try:
+        from fomo_cli.web import manual_sell
+
+        data = request.get_json(force=True) or {}
+        result = manual_sell(
+            token=data.get("token"),
+            address=data.get("address"),
+            position_id=data.get("position_id"),
+            usd=data.get("usd"),
+        )
+        return jsonify(result)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"copy-trader sell failed: {exc}")
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 @socketio.on("update", namespace="/backend")

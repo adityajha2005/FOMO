@@ -14,16 +14,41 @@ from .store import Store
 PONS = "0x39dbed3a2bd333467115de45665cc57f813c4571"
 NOW = time.time()
 TRADES = [
-    {"token": "A", "entryUsd": 1000, "realizedPnlUsd": 400, "openedAt": (NOW - 7200) * 1000, "closedAt": (NOW - 3600) * 1000},
-    {"token": "B", "entryUsd": 800, "realizedPnlUsd": -200, "openedAt": (NOW - 5000) * 1000, "closedAt": (NOW - 4000) * 1000},
-    {"token": "C", "entryUsd": 1200, "realizedPnlUsd": 900, "openedAt": (NOW - 90000) * 1000, "closedAt": (NOW - 1000) * 1000},
+    {
+        "token": "A",
+        "entryUsd": 1000,
+        "realizedPnlUsd": 400,
+        "openedAt": (NOW - 7200) * 1000,
+        "closedAt": (NOW - 3600) * 1000,
+    },
+    {
+        "token": "B",
+        "entryUsd": 800,
+        "realizedPnlUsd": -200,
+        "openedAt": (NOW - 5000) * 1000,
+        "closedAt": (NOW - 4000) * 1000,
+    },
+    {
+        "token": "C",
+        "entryUsd": 1200,
+        "realizedPnlUsd": 900,
+        "openedAt": (NOW - 90000) * 1000,
+        "closedAt": (NOW - 1000) * 1000,
+    },
 ]
 THESES = [
     {"text": "A goes up", "symbol": "A", "likes": 12, "realizedPnlUsd": 400, "unrealizedPnlUsd": 0, "ts": NOW - 7000},
     {"text": "B goes up", "symbol": "B", "likes": 1, "realizedPnlUsd": -200, "ts": NOW - 5000},
     {"text": "no pnl yet", "symbol": "D", "likes": 3},
 ]
-ENTRY = {"handle": "tester", "pnlUsd": 5000, "volumeUsd": 30000, "trades": 30, "followers": 10, "wallets": {"evm": "0x1"}}
+ENTRY = {
+    "handle": "tester",
+    "pnlUsd": 5000,
+    "volumeUsd": 30000,
+    "trades": 30,
+    "followers": 10,
+    "wallets": {"evm": "0x1"},
+}
 
 
 class FakeAPI:
@@ -62,8 +87,16 @@ def test_copy_flow():
     bot = CopyTrader(cfg, FakeAPI(), store, PaperExecutor(), log=lambda *a: None)
     bot.follow_set()
     assert "tester" in bot.follow
-    bot.recent_buys[PONS] = [("someone_else", time.time())]  # confluence gate
-    alert = {"type": "buy", "trader": "tester", "token": "PONS", "tokenAddress": PONS, "chainId": 4663, "chain": "robinhood", "usdValue": 2000}
+    bot.recent_buys[PONS] = [("w1", time.time()), ("w2", time.time())]  # 3 wallets after tester alert
+    alert = {
+        "type": "buy",
+        "trader": "tester",
+        "token": "PONS",
+        "tokenAddress": PONS,
+        "chainId": 4663,
+        "chain": "robinhood",
+        "usdValue": 2000,
+    }
     bot.on_alert(alert)
     opened = store.open_positions()
     assert len(opened) == 1 and opened[0]["qty"] > 0, opened

@@ -1,7 +1,7 @@
-import { CACHE_TTL, KNOWN_TOKENS } from "../config/polling.js";
+import { CACHE_TTL, KNOWN_TOKENS, LEADERBOARD_CACHE_MS, LEADERBOARD_REFRESH_MS } from "../config/polling.js";
 import { LIVE_API_ENABLED } from "../config/api.js";
-import { fetchWithCache } from "../utils/fomoCache.js";
-import { formatPnl, formatUsd, formatPercent } from "../utils/format.js";
+import { clearCache, fetchWithCache } from "../utils/fomoCache.js";
+import { formatLeaderboardPnl, formatPnl, formatUsd, formatPercent } from "../utils/format.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -44,12 +44,28 @@ function mapTraderEntry(trader) {
     rank: trader.rank,
     name,
     handle: `@${handle}`,
-    pnl: formatPnl(pnlRaw),
+    pnl: formatLeaderboardPnl(pnlRaw),
     pnlRaw,
     avatarUrl: trader.avatar || null,
     initials: name.slice(0, 1).toUpperCase(),
     clan: trader.clan || null,
   };
+}
+
+function formatClanPnl(value) {
+  const amount = Number(value) || 0;
+  const abs = Math.abs(amount);
+  const sign = amount >= 0 ? "+" : "-";
+
+  if (abs >= 1_000_000) {
+    return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  }
+
+  if (abs >= 1_000) {
+    return `${sign}$${(abs / 1_000).toFixed(1)}K`;
+  }
+
+  return `${sign}$${abs.toFixed(0)}`;
 }
 
 function mapClanEntry(clan) {
@@ -61,7 +77,7 @@ function mapClanEntry(clan) {
     rank: clan.rank,
     name,
     members: clan.members ?? clan.memberCount ?? 0,
-    pnl: formatPnl(pnlRaw),
+    pnl: formatClanPnl(pnlRaw),
     pnlRaw,
     avatarUrl: clan.avatarUrl || clan.iconLink || clan.icon || null,
     initials: name.slice(0, 2).toUpperCase(),
@@ -97,24 +113,107 @@ export function aggregateClansFromTraders(traders) {
 }
 
 export async function getTraderLeaderboard({ window = "7d", limit = 30 } = {}) {
-  const cacheKey = `fomo:leaderboard:${window}:${limit}`;
+  const cacheKey = `fomo:leaderboard:v3:${window}:${limit}`;
   return fetchWithCache(cacheKey, async () => {
     const params = new URLSearchParams({ limit: String(limit) });
     const payload = await fomoapiRequest(`/v2/leaderboard/${window}?${params}`);
     return (payload.traders ?? []).map(mapTraderEntry);
-  }, CACHE_TTL.leaderboard);
+  }, LEADERBOARD_CACHE_MS);
+}
+
+function mapClanFromProdApi(clan) {
+  const pnlRaw = Number(clan.pnlUsd ?? clan.pnl ?? clan.totalPnlUsd) || 0;
+  const name = clan.name || "Unknown";
+
+  return {
+    id: clan.id,
+    rank: clan.rank,
+    name,
+    members: clan.memberCount ?? clan.members ?? clan.numMembers ?? 0,
+    pnl: formatClanPnl(pnlRaw),
+    pnlRaw,
+    avatarUrl: clan.iconLink || clan.icon || clan.avatarUrl || null,
+    initials: name.slice(0, 2).toUpperCase(),
+    source: "fomo.family",
+  };
+}
+
+async function fetchProdClanLeaderboard({ window = "24h", limit = 50 } = {}) {
+  const params = new URLSearchParams({ window, limit: String(limit) });
+  const response = await fetch(`${API_BASE}/api/fomo/v2/clans/leaderboard?${params}`);
+
+  if (response.status === 401 || response.status === 430) {
+    return { error: "expired" };
+  }
+
+  if (!response.ok) {
+    return { error: "unavailable" };
+  }
+
+  const payload = await response.json();
+  const rows =
+    payload.responseObject?.leaderboard ??
+    payload.clans ??
+    payload.data ??
+    payload.results ??
+    [];
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { error: "empty" };
+  }
+
+  return {
+    clans: rows.map((clan, index) =>
+      mapClanFromProdApi({ ...clan, rank: clan.rank ?? index + 1 }),
+    ),
+  };
+}
+
+export async function getClanLeaderboard({ window = "24h", limit = 50 } = {}) {
+  const cacheKey = `fomo:clans:v3:${window}:${limit}`;
+
+  return fetchWithCache(cacheKey, async () => {
+    const live = await fetchProdClanLeaderboard({ window, limit });
+    if (live?.clans) {
+      return { clans: live.clans, source: "fomo.family", tokenError: null };
+    }
+
+    const traders = await getTraderLeaderboard({ window, limit: 100 });
+    return {
+      clans: aggregateClansFromTraders(traders).map((clan) => ({
+        ...clan,
+        source: "estimated",
+      })),
+      source: "estimated",
+      tokenError: live?.error === "expired" ? "expired" : live?.error ?? "missing",
+    };
+  }, LEADERBOARD_CACHE_MS);
+}
+
+export function clearLeaderboardCache() {
+  for (const key of ["24h", "7d", "30d", "all"]) {
+    clearCache(`fomo:leaderboard:v3:${key}:30`);
+    clearCache(`fomo:leaderboard:v3:${key}:100`);
+    clearCache(`fomo:clans:v3:${key}:50`);
+  }
 }
 
 export async function getLeaderboard(options = {}) {
-  const traders = await getTraderLeaderboard(options);
-  const clans = aggregateClansFromTraders(traders);
+  const window = options.window ?? "24h";
+  const limit = options.limit ?? 30;
 
-  return { traders, clans, source: "fomoapi" };
-}
+  const [traders, clanPayload] = await Promise.all([
+    getTraderLeaderboard({ window, limit }),
+    getClanLeaderboard({ window, limit: 50 }),
+  ]);
 
-export async function getClanLeaderboard(options = {}) {
-  const traders = await getTraderLeaderboard(options);
-  return { clans: aggregateClansFromTraders(traders), source: "fomoapi-derived" };
+  return {
+    traders,
+    clans: clanPayload.clans,
+    clanSource: clanPayload.source,
+    clanTokenError: clanPayload.tokenError,
+    traderSource: "fomoapi",
+  };
 }
 
 export async function getAlerts({ limit = 30 } = {}) {

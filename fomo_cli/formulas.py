@@ -2,7 +2,8 @@
 Keep in sync with scoring.py / sizing.py — the doc in docs/fomo_cli.md is the long form."""
 from .sizing import EXIT_RULES, STYLE_MULT
 
-FORMULAS_MD = """
+FORMULAS_MD = (
+    """
 # How fomo-cli scores, sizes and exits
 
 ## Trader style
@@ -44,15 +45,18 @@ trader not paused → chain enabled → not already held → open < max_open and
 ## Exits by style
 | style | time stop | stop | take | scale out | follows trader's sell |
 |---|---|---|---|---|---|
-""" + "\n".join(
-    f"| {s} | {r['time_stop_h']:g} h | {r['stop_pct']}% | {('+%d%%' % r['take_pct']) if r['take_pct'] else '—'} | "
-    f"{('50%% at +%d%%' % r['scale_out_pct']) if r['scale_out_pct'] else '—'} | {'yes' if r['follow_sell'] else 'no'} |"
-    for s, r in EXIT_RULES.items()
-) + """
+"""
+    + "\n".join(
+        f"| {s} | {r['time_stop_h']:g} h | {r['stop_pct']}% | {('+%d%%' % r['take_pct']) if r['take_pct'] else '—'} | "
+        f"{('50%% at +%d%%' % r['scale_out_pct']) if r['scale_out_pct'] else '—'} | {'yes' if r['follow_sell'] else 'no'} |"
+        for s, r in EXIT_RULES.items()
+    )
+    + """
 
 ## Trader safeguards
 pause on **wallet change**; pause when the last 5 followed buys average **< −10 % one hour later** (marks local tops)
 """
+)
 
 
 def explain_sizes(cfg, score, conv, sizes):

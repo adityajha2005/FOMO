@@ -3,28 +3,36 @@ import { CandlestickSeries, createChart, CrosshairMode } from "lightweight-chart
 import { CHART_REFRESH_MS } from "../config/polling.js";
 import { LIVE_API_ENABLED } from "../config/api.js";
 import { getKlines } from "../services/binanceApi.js";
-import { binanceSymbolUrl, openExternal } from "../utils/links.js";
 
 const INTERVALS = [
   { label: "1m", value: "1m" },
+  { label: "5m", value: "5m" },
   { label: "15m", value: "15m" },
   { label: "1h", value: "1h" },
   { label: "4h", value: "4h" },
   { label: "1D", value: "1d" },
-  { label: "1W", value: "1w" },
+];
+
+const RANGE = [
+  { label: "1D", value: "1d" },
+  { label: "5D", value: "5d" },
+  { label: "1M", value: "1M" },
+  { label: "3M", value: "3M" },
+  { label: "6M", value: "6M" },
+  { label: "1Y", value: "1y" },
 ];
 
 function generateCandles(count = 120) {
   const candles = [];
   let time = Math.floor(Date.now() / 1000) - count * 3600;
-  let price = 0.82;
+  let price = 0.88;
 
   for (let i = 0; i < count; i += 1) {
-    const volatility = 0.015 + Math.random() * 0.02;
+    const volatility = 0.012 + Math.random() * 0.018;
     const open = price;
-    const close = open * (1 + (Math.random() - 0.48) * volatility);
-    const high = Math.max(open, close) * (1 + Math.random() * 0.008);
-    const low = Math.min(open, close) * (1 - Math.random() * 0.008);
+    const close = open * (1 + (Math.random() - 0.46) * volatility);
+    const high = Math.max(open, close) * (1 + Math.random() * 0.006);
+    const low = Math.min(open, close) * (1 - Math.random() * 0.006);
 
     candles.push({ time, open, high, low, close });
     price = close;
@@ -34,25 +42,17 @@ function generateCandles(count = 120) {
   return candles;
 }
 
-function resolveBinanceSymbol(symbol, quoteMode) {
-  if (quoteMode === "btc") {
-    return "BTCUSDT";
-  }
-
-  const majors = ["BTC", "ETH", "SOL", "BNB", "DASH", "ADA", "ATOM", "XRP", "DOGE", "LTC"];
-  if (majors.includes(symbol)) {
-    return `${symbol}USDT`;
-  }
-
-  return "BTCUSDT";
-}
-
-export default function PriceChart({ symbol = "PONS", live = false }) {
+export default function PriceChart({ symbol = "PONS", live = false, price = "$0.922" }) {
   const containerRef = useRef(null);
   const seriesRef = useRef(null);
-  const chartRef = useRef(null);
   const [interval, setInterval] = useState("1d");
-  const [quoteMode, setQuoteMode] = useState("usd");
+  const [range, setRange] = useState("1D");
+  const [overlays, setOverlays] = useState({
+    swaps: false,
+    thesis: true,
+    friends: false,
+    minSize: true,
+  });
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -61,37 +61,36 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { color: "#0f1216" },
-        textColor: "#848e9c",
+        background: { color: "#0a0a0b" },
+        textColor: "#71717a",
       },
       grid: {
-        vertLines: { color: "#1e2329" },
-        horzLines: { color: "#1e2329" },
+        vertLines: { color: "rgba(255,255,255,0.04)" },
+        horzLines: { color: "rgba(255,255,255,0.04)" },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
       },
       rightPriceScale: {
-        borderColor: "#222222",
+        borderColor: "rgba(255,255,255,0.08)",
       },
       timeScale: {
-        borderColor: "#222222",
+        borderColor: "rgba(255,255,255,0.08)",
         timeVisible: true,
       },
       width: containerRef.current.clientWidth,
-      height: 360,
+      height: 380,
     });
 
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: "#0ecb81",
-      downColor: "#f6465d",
-      borderUpColor: "#0ecb81",
-      borderDownColor: "#f6465d",
-      wickUpColor: "#0ecb81",
-      wickDownColor: "#f6465d",
+      upColor: "#4ade80",
+      downColor: "#f87171",
+      borderUpColor: "#4ade80",
+      borderDownColor: "#f87171",
+      wickUpColor: "#4ade80",
+      wickDownColor: "#f87171",
     });
 
-    chartRef.current = chart;
     seriesRef.current = series;
     series.setData(generateCandles());
 
@@ -107,13 +106,12 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
     return () => {
       resizeObserver.disconnect();
       chart.remove();
-      chartRef.current = null;
       seriesRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!LIVE_API_ENABLED) {
+    if (!LIVE_API_ENABLED || !live) {
       return undefined;
     }
 
@@ -124,11 +122,8 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
         return;
       }
 
-      const binanceSymbol = resolveBinanceSymbol(symbol, quoteMode);
-
       try {
-        const candles = await getKlines(binanceSymbol, interval, 120);
-
+        const candles = await getKlines("BTCUSDT", interval, 120);
         if (active && candles.length > 0) {
           seriesRef.current.setData(candles);
         }
@@ -146,12 +141,19 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
       active = false;
       window.clearInterval(intervalId);
     };
-  }, [symbol, interval, quoteMode]);
+  }, [symbol, interval, live]);
 
-  const chartPair = resolveBinanceSymbol(symbol, quoteMode).replace("USDT", "");
+  function toggleOverlay(key) {
+    setOverlays((current) => ({ ...current, [key]: !current[key] }));
+  }
 
   return (
     <div className="chart-panel">
+      <div className="chart-header">
+        <span className="chart-header__label">{symbol}/USD · Market Cap</span>
+        <span className="chart-header__price num positive">{price}</span>
+      </div>
+
       <div className="chart-toolbar">
         <div className="chart-toolbar__left">
           {INTERVALS.map((item) => (
@@ -166,23 +168,46 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
           ))}
         </div>
         <div className="chart-toolbar__right">
-          <button
-            type="button"
-            className="pill pill--ghost"
-            onClick={() => openExternal(binanceSymbolUrl(chartPair))}
-          >
-            {live ? "Market data" : "Reference chart"}
-          </button>
-          <button
-            type="button"
-            className="pill"
-            onClick={() => setQuoteMode((current) => (current === "usd" ? "btc" : "usd"))}
-          >
-            {quoteMode === "usd" ? `${symbol}/USDT` : "BTC/USDT"}
+          <button type="button" className="pill">
+            Indicators
           </button>
         </div>
       </div>
+
       <div ref={containerRef} className="chart-canvas" />
+
+      <div className="chart-footer">
+        <div className="chart-toolbar__left">
+          {RANGE.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={item.label === range ? "pill active" : "pill"}
+              onClick={() => setRange(item.label)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="chart-overlays">
+          <label className="overlay-check">
+            <input type="checkbox" checked={overlays.swaps} onChange={() => toggleOverlay("swaps")} />
+            My swaps
+          </label>
+          <label className="overlay-check">
+            <input type="checkbox" checked={overlays.thesis} onChange={() => toggleOverlay("thesis")} />
+            Thesis
+          </label>
+          <label className="overlay-check">
+            <input type="checkbox" checked={overlays.friends} onChange={() => toggleOverlay("friends")} />
+            Friends only
+          </label>
+          <label className="overlay-check">
+            <input type="checkbox" checked={overlays.minSize} onChange={() => toggleOverlay("minSize")} />
+            Min size (&gt;$1K)
+          </label>
+        </div>
+      </div>
     </div>
   );
 }

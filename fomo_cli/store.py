@@ -30,6 +30,7 @@ class Store:
         def wrapper(*a, **k):
             with self.lock:
                 return fn(*a, **k)
+
         return wrapper
 
     # ---- positions ----
@@ -59,14 +60,57 @@ class Store:
 
     def scale_out(self, pid, qty_left, usd_left, pnl_usd):
         self.execute(
-            "UPDATE positions SET qty=?, usd_in=?, pnl_usd=pnl_usd+?, scaled_out=1 WHERE id=?", (qty_left, usd_left, pnl_usd, pid)
+            "UPDATE positions SET qty=?, usd_in=?, pnl_usd=pnl_usd+?, scaled_out=1 WHERE id=?",
+            (qty_left, usd_left, pnl_usd, pid),
         )
         self.commit()
 
     def daily_pnl(self):
         day = time.time() - 86400
-        r = self.execute("SELECT COALESCE(SUM(pnl_usd),0) FROM positions WHERE closed_at > ? OR (scaled_out=1 AND opened_at > ?)", (day, day))
+        r = self.execute(
+            "SELECT COALESCE(SUM(pnl_usd),0) FROM positions WHERE closed_at > ? OR (scaled_out=1 AND opened_at > ?)",
+            (day, day),
+        )
         return r.fetchone()[0]
+
+    def portfolio_stats(self, account_usd, mark_prices=None):
+        mark_prices = mark_prices or {}
+        closed = [dict(r) for r in self.execute("SELECT * FROM positions WHERE status='closed'")]
+        open_rows = self.open_positions()
+        realized = sum(float(p["pnl_usd"] or 0) for p in closed)
+        unrealized = 0.0
+        open_value = 0.0
+        for p in open_rows:
+            now = mark_prices.get(p["id"])
+            if now:
+                val = float(p["qty"]) * float(now)
+                open_value += val
+                unrealized += val - float(p["usd_in"])
+        wins = sum(1 for p in closed if float(p["pnl_usd"] or 0) > 0)
+        total_closed = len(closed)
+        total_pnl = realized + unrealized
+        roi = (total_pnl / account_usd * 100) if account_usd else 0.0
+        session_started = self.get("session_started")
+        elapsed_h = (time.time() - session_started) / 3600 if session_started else 0.0
+        return {
+            "realized_pnl": realized,
+            "unrealized_pnl": unrealized,
+            "total_pnl": total_pnl,
+            "roi_pct": roi,
+            "win_rate": wins / total_closed if total_closed else None,
+            "wins": wins,
+            "losses": total_closed - wins,
+            "closed_trades": total_closed,
+            "open_count": len(open_rows),
+            "open_value": open_value,
+            "open_capital": sum(float(p["usd_in"]) for p in open_rows),
+            "day_pnl": self.daily_pnl(),
+            "session_hours": elapsed_h,
+        }
+
+    def ensure_session(self):
+        if not self.get("session_started"):
+            self.set("session_started", time.time())
 
     # ---- trader state ----
     def trader(self, handle):

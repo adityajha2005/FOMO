@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { NavLink, Link } from "react-router-dom";
 import {
   BINANCE_DEPOSIT_URL,
   FOMO_APP_URL,
@@ -68,81 +69,92 @@ export default function TopNav({ portfolioUsd = 0, cashUsd = 0 }) {
     setQuery("");
   }
 
+  async function handlePaste() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setQuery(text.trim());
+      }
+    } catch {
+      // clipboard unavailable
+    }
+  }
+
+  const cash = cashUsd || 0;
+  const portfolio = portfolioUsd || 0;
+
   return (
     <header className="top-nav">
-      <div className="top-nav__left">
-        <a
-          className="logo"
-          href="/"
-          onClick={(event) => {
+      <Link className="logo" to="/">
+        fomo
+      </Link>
+
+      <nav className="top-nav__links" aria-label="Main">
+        <NavLink to="/docs" className={({ isActive }) => (isActive ? "active" : undefined)}>
+          Docs
+        </NavLink>
+        <NavLink to="/formulas" className={({ isActive }) => (isActive ? "active" : undefined)}>
+          Formulas
+        </NavLink>
+      </nav>
+
+      <div className="search-bar-wrap" ref={searchRef}>
+        <form
+          className="search-bar"
+          onSubmit={(event) => {
             event.preventDefault();
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            runSearch();
           }}
         >
-          FOMO<span className="logo__suffix">Terminal</span>
-        </a>
+          <input
+            placeholder="Search for tokens or traders..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onFocus={() => results.length > 0 && setSearchOpen(true)}
+          />
+          <button type="button" className="search-bar__paste" onClick={handlePaste}>
+            Paste
+          </button>
+        </form>
 
-        <div className="search-bar-wrap" ref={searchRef}>
-          <form
-            className="search-bar"
-            onSubmit={(event) => {
-              event.preventDefault();
-              runSearch();
-            }}
-          >
-            <span className="search-bar__label">Search</span>
-            <input
-              placeholder="Symbol, trader, or contract"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onFocus={() => results.length > 0 && setSearchOpen(true)}
-            />
-            <button type="submit" className="search-bar__submit">
-              Go
-            </button>
-          </form>
-
-          {searchOpen ? (
-            <div className="search-results">
-              {searchLoading ? <p className="sidebar-status">Searching...</p> : null}
-              {!searchLoading && results.length === 0 ? (
-                <p className="sidebar-status">No results. Press Enter to search on fomo.family.</p>
-              ) : null}
-              {!searchLoading
-                ? results.map((item) => (
-                    <button
-                      key={`${item.type}-${item.handle || item.symbol || item.address}`}
-                      type="button"
-                      className="search-results__item"
-                      onClick={() => handleResultClick(item)}
-                    >
-                      <strong>{item.type === "token" ? item.symbol : item.displayName || item.handle}</strong>
-                      <span>{item.type === "token" ? item.name : `@${item.handle}`}</span>
-                      {item.type === "token" && item.marketCapUsd != null ? (
-                        <span className="num">{formatUsd(item.marketCapUsd, { compact: true })} mcap</span>
-                      ) : null}
-                    </button>
-                  ))
-                : null}
-            </div>
-          ) : null}
-        </div>
+        {searchOpen ? (
+          <div className="search-results">
+            {searchLoading ? <p className="sidebar-status">Searching...</p> : null}
+            {!searchLoading && results.length === 0 ? (
+              <p className="sidebar-status">No results. Press Enter to search on fomo.family.</p>
+            ) : null}
+            {!searchLoading
+              ? results.map((item) => (
+                  <button
+                    key={`${item.type}-${item.handle || item.symbol || item.address}`}
+                    type="button"
+                    className="search-results__item"
+                    onClick={() => handleResultClick(item)}
+                  >
+                    <strong>{item.type === "token" ? item.symbol : item.displayName || item.handle}</strong>
+                    <span>{item.type === "token" ? item.name : `@${item.handle}`}</span>
+                    {item.type === "token" && item.marketCapUsd != null ? (
+                      <span className="num">{formatUsd(item.marketCapUsd, { compact: true })} mcap</span>
+                    ) : null}
+                  </button>
+                ))
+              : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="top-nav__right">
-        <div className="wallet-stat">
-          <span className="wallet-stat__label">Available</span>
-          <strong className="num">${cashUsd.toFixed(2)}</strong>
+        <div className="wallet-block">
+          <div className="wallet-block__cash">
+            <strong className="num">${cash.toFixed(2)}</strong> cash{" "}
+            <a className="wallet-block__deposit" href={BINANCE_DEPOSIT_URL} target="_blank" rel="noreferrer">
+              Deposit more
+            </a>
+          </div>
+          <div className="wallet-block__secondary num">${portfolio.toFixed(2)} —</div>
         </div>
-        <div className="wallet-stat">
-          <span className="wallet-stat__label">Portfolio</span>
-          <strong className="num">${portfolioUsd.toFixed(2)}</strong>
-        </div>
-        <a className="ghost-btn" href={BINANCE_DEPOSIT_URL} target="_blank" rel="noreferrer">
-          Deposit
-        </a>
         <a className="avatar avatar--nav" href={FOMO_APP_URL} target="_blank" rel="noreferrer" aria-label="Account">
-          AC
+          <span style={{ fontSize: "0.7rem" }}>●</span>
         </a>
       </div>
     </header>
