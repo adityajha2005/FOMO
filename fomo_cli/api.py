@@ -14,6 +14,8 @@ DEX = "https://api.dexscreener.com"
 
 # credit cost per endpoint prefix, from GET /v1 (used only for the session counter)
 COSTS = [("/v2/users/id/", 10), ("/v2/thesis", 5), ("/v2/alerts", 0.5)]
+# free without a key; sending the key here would bill them (alerts 0.5/poll adds up to thousands a day)
+KEYLESS = ("/v2/leaderboard/", "/v2/alerts", "/v1", "/health")
 
 
 class ApiError(Exception):
@@ -52,10 +54,11 @@ class FomoAPI:
             if hit and time.time() - hit["t"] < ttl:
                 return hit["d"]
         headers = {"User-Agent": "fomo-cli/0.1"}
-        if self.key:
+        keyed = bool(self.key) and not path.startswith(KEYLESS)
+        if keyed:
             headers["Authorization"] = f"Bearer {self.key}"
         data = _http_json(url, headers)
-        if self.key:
+        if keyed:
             self.credits_spent += next((c for p, c in COSTS if path.startswith(p)), 1)
         if ttl:
             self.cache[url] = {"t": time.time(), "d": data}
@@ -81,14 +84,14 @@ class FomoAPI:
         return d.get("theses") or d.get("items") or []
 
     def token_theses(self, handle, address):
-        d = self.get(f"/v2/thesis/user/{handle}/token/{address}", ttl=3600)
+        d = self.get(f"/v2/thesis/user/{handle}/token/{address}", ttl=self.cfg.cache_ttl_token)
         return d.get("theses") or d.get("items") or []
 
     def token_stats(self, address, network_id=None):
-        return self.get(f"/v2/token/{address}/stats", {"networkId": network_id}, ttl=300)
+        return self.get(f"/v2/token/{address}/stats", {"networkId": network_id}, ttl=self.cfg.cache_ttl_token)
 
     def token_devs(self, address, network_id=None):
-        d = self.get(f"/v2/token/{address}/devs", {"networkId": network_id}, ttl=600)
+        d = self.get(f"/v2/token/{address}/devs", {"networkId": network_id}, ttl=self.cfg.cache_ttl_token)
         return d.get("devs") or d.get("holders") or d.get("items") or []
 
     def me(self):

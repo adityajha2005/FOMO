@@ -32,6 +32,7 @@ class Config:
     slippage_bps: int = 300
     cache_ttl_leaderboard: int = 600
     cache_ttl_trader: int = 24 * 3600
+    cache_ttl_token: int = 3600  # keyed token stats/devs/theses checks
     data_dir: Path = field(default_factory=lambda: ROOT / "data")
 
     @classmethod
