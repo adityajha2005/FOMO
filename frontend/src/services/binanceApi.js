@@ -1,3 +1,5 @@
+const BINANCE_BASE = import.meta.env.PROD ? "/api/binance" : "https://api.binance.com";
+
 const TICKER_SYMBOLS = [
   { symbol: "BTCUSDT", label: "BTC" },
   { symbol: "ETHUSDT", label: "ETH" },
@@ -29,7 +31,7 @@ function formatChange(value) {
 export async function getMarketTicker() {
   const symbols = JSON.stringify(TICKER_SYMBOLS.map((item) => item.symbol));
   const response = await fetch(
-    `https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(symbols)}`,
+    `${BINANCE_BASE}/api/v3/ticker/24hr?symbols=${encodeURIComponent(symbols)}`,
   );
 
   if (!response.ok) {
@@ -54,7 +56,7 @@ export async function getMarketTicker() {
 
 export async function getKlines(symbol = "BTCUSDT", interval = "1h", limit = 120) {
   const params = new URLSearchParams({ symbol, interval, limit: String(limit) });
-  const response = await fetch(`https://api.binance.com/api/v3/klines?${params}`);
+  const response = await fetch(`${BINANCE_BASE}/api/v3/klines?${params}`);
 
   if (!response.ok) {
     throw new Error(`Binance klines failed: ${response.status}`);
