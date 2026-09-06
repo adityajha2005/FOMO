@@ -93,11 +93,7 @@ class CopyTrader:
             return f"formula-1 hype (${vol_5m:,.0f} vol/5m)"
 
         # Formula 2: confluence — low volume + 3 tracked wallets on same coin
-        handles = {
-            h
-            for h, ts in self.recent_buys.get(address, [])
-            if time.time() - ts < CONFLUENCE_WINDOW_S
-        }
+        handles = {h for h, ts in self.recent_buys.get(address, []) if time.time() - ts < CONFLUENCE_WINDOW_S}
         if len(handles) >= self.cfg.confluence_min_wallets and vol_5m < self.cfg.low_vol_5m_usd:
             return f"formula-2 confluence ({len(handles)} wallets: {', '.join(sorted(handles)[:4])})"
 

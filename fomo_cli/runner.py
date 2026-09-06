@@ -5,8 +5,8 @@ from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 
-from .api import dex_pair
 from . import ui
+from .api import dex_pair
 
 
 class TerminalRunner:
