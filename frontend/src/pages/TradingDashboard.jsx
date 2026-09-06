@@ -86,7 +86,7 @@ export default function TradingDashboard() {
   const [thesisError, setThesisError] = useState(null);
   const [holdersShown, setHoldersShown] = useState(null);
   const [allClans, setAllClans] = useState(CLANS);
-  const [clanSource, setClanSource] = useState("estimated");
+  const [clanSource, setClanSource] = useState("fomoapi");
   const [clanTokenError, setClanTokenError] = useState(null);
   const [actionMessage, setActionMessage] = useState(null);
 
@@ -111,7 +111,7 @@ export default function TradingDashboard() {
       setLeaderboard(traders);
       setClans(liveClans.slice(0, 6));
       setAllClans(liveClans);
-      setClanSource(liveClanSource || "estimated");
+      setClanSource(liveClanSource || "fomoapi");
       setClanTokenError(tokenErr ?? null);
       setLeaderboardLive(true);
       setLeaderboardError(null);

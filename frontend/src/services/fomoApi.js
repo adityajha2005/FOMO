@@ -46,7 +46,7 @@ function mapTraderEntry(trader) {
     handle: `@${handle}`,
     pnl: formatLeaderboardPnl(pnlRaw),
     pnlRaw,
-    avatarUrl: trader.avatar || null,
+    avatarUrl: trader.avatar || trader.profilePictureLink || null,
     initials: name.slice(0, 1).toUpperCase(),
     clan: trader.clan || null,
   };
@@ -170,21 +170,35 @@ async function fetchProdClanLeaderboard({ window = "24h", limit = 50 } = {}) {
 }
 
 export async function getClanLeaderboard({ window = "24h", limit = 50 } = {}) {
-  const cacheKey = `fomo:clans:v3:${window}:${limit}`;
+  const cacheKey = `fomo:clans:v4:${window}:${limit}`;
 
   return fetchWithCache(cacheKey, async () => {
+    // prod-api.fomo.family often blocks server-side requests (430) even with a valid token.
+    // fomoapi.io attaches clan on each trader ? aggregate that as the reliable source.
+    const traders = await getTraderLeaderboard({ window, limit: 100 });
+    const aggregated = aggregateClansFromTraders(traders).slice(0, limit);
+
+    if (aggregated.length > 0) {
+      const live = await fetchProdClanLeaderboard({ window, limit });
+      if (live?.clans?.length) {
+        return { clans: live.clans, source: "fomo.family", tokenError: null };
+      }
+
+      return {
+        clans: aggregated.map((clan) => ({ ...clan, source: "fomoapi" })),
+        source: "fomoapi",
+        tokenError: null,
+      };
+    }
+
     const live = await fetchProdClanLeaderboard({ window, limit });
     if (live?.clans) {
       return { clans: live.clans, source: "fomo.family", tokenError: null };
     }
 
-    const traders = await getTraderLeaderboard({ window, limit: 100 });
     return {
-      clans: aggregateClansFromTraders(traders).map((clan) => ({
-        ...clan,
-        source: "estimated",
-      })),
-      source: "estimated",
+      clans: [],
+      source: "unavailable",
       tokenError: live?.error === "expired" ? "expired" : live?.error ?? "missing",
     };
   }, LEADERBOARD_CACHE_MS);
@@ -194,7 +208,7 @@ export function clearLeaderboardCache() {
   for (const key of ["24h", "7d", "30d", "all"]) {
     clearCache(`fomo:leaderboard:v3:${key}:30`);
     clearCache(`fomo:leaderboard:v3:${key}:100`);
-    clearCache(`fomo:clans:v3:${key}:50`);
+    clearCache(`fomo:clans:v4:${key}:50`);
   }
 }
 

@@ -111,7 +111,7 @@ export default function HoldersTable({
                       >
                         {row.avatarUrl ? (
                           <div className="avatar avatar--sm">
-                            <img src={row.avatarUrl} alt="" loading="lazy" />
+                            <img src={row.avatarUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />
                           </div>
                         ) : (
                           <div className="avatar avatar--sm">{row.name[0]}</div>

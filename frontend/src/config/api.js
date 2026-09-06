@@ -1,5 +1,7 @@
 /**
- * Set VITE_LIVE_API=true in frontend/.env when ready to wire live data back in.
- * While false, the app uses mock data only — zero network calls to FOMO/Binance/bot APIs.
+ * Live data is on when VITE_LIVE_API=true in .env (local dev).
+ * Production builds (e.g. Vercel) default to live unless VITE_LIVE_API=false.
  */
-export const LIVE_API_ENABLED = import.meta.env.VITE_LIVE_API === "true";
+const liveFlag = import.meta.env.VITE_LIVE_API;
+export const LIVE_API_ENABLED =
+  liveFlag === "true" || (import.meta.env.PROD && liveFlag !== "false");

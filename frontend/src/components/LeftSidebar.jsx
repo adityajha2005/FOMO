@@ -13,10 +13,18 @@ const WINDOWS = [
 ];
 
 function Avatar({ url, initials, className = "avatar avatar--sm" }) {
-  if (url) {
+  const [failed, setFailed] = useState(false);
+
+  if (url && !failed) {
     return (
       <div className={className}>
-        <img src={url} alt="" loading="lazy" />
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+        />
       </div>
     );
   }
@@ -39,7 +47,7 @@ export default function LeftSidebar({
   error = null,
   leaderboardWindow = "24h",
   onWindowChange,
-  clanSource = "fomo.family",
+  clanSource = "fomoapi",
   clanTokenError = null,
 }) {
   const [trendingTokens, setTrendingTokens] = useState([]);
@@ -172,11 +180,14 @@ export default function LeftSidebar({
                   Clans
                   <span className="badge-new">New</span>
                 </h3>
-                {clanSource === "estimated" ? (
+                {clanSource === "fomoapi" ? (
+                  <span className="sidebar-section__hint">
+                    PnL from top traders · member counts are approximate
+                  </span>
+                ) : null}
+                {clanSource === "unavailable" && clanTokenError ? (
                   <span className="sidebar-section__hint sidebar-section__hint--warn">
-                    {clanTokenError === "expired"
-                      ? "FOMO_TOKEN expired — copy a fresh one from fomo.family DevTools → Network"
-                      : "Add FOMO_TOKEN to frontend/.env for live clan data (fomoapi key alone is not enough)"}
+                    Clan data unavailable — check FOMO_API_KEY in frontend/.env
                   </span>
                 ) : null}
               </div>
@@ -197,7 +208,11 @@ export default function LeftSidebar({
                       >
                         <div className="clan-card__top">
                           <div className="clan-card__avatar" style={{ background: clan.color || "var(--bg-hover)" }}>
-                            {clan.avatarUrl ? <img src={clan.avatarUrl} alt="" /> : clan.initials || clan.name.slice(0, 2)}
+                            {clan.avatarUrl ? (
+                              <img src={clan.avatarUrl} alt="" referrerPolicy="no-referrer" />
+                            ) : (
+                              clan.initials || clan.name.slice(0, 2)
+                            )}
                           </div>
                           <span className="clan-card__name">{clan.name}</span>
                         </div>
