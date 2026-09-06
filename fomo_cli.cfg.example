@@ -1,0 +1,20 @@
+# copy to fomo_cli.cfg (gitignored). Env vars with the same UPPERCASE names override.
+[fomo]
+fomo_api_key =
+account_usd = 1000
+sizing = conviction        ; fixed | kelly | conviction
+base_pct = 2
+max_pct = 6
+min_usd = 10
+max_open = 6
+daily_loss_limit_pct = 8
+min_liquidity_usd = 20000
+max_liquidity_share_pct = 1
+max_top10_holders_pct = 45
+min_thesis_hitrate = 0.55
+chains = solana,robinhood,base,bsc,ethereum
+poll_seconds = 20
+live = false
+solana_private_key =
+solana_rpc = https://api.mainnet-beta.solana.com
+slippage_bps = 300

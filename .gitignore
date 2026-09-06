@@ -15,4 +15,5 @@ apprise.yml
 .bot/
 frontend/node_modules/
 frontend/dist/
-frontend/.env
+frontend/.envfomo_cli.cfg
+data/*.sqlite

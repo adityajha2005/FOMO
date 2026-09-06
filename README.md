@@ -207,3 +207,33 @@ If you plan to use real money, USE AT YOUR OWN RISK.
 Under no circumstances will I be held responsible or liable in any way for any
 claims, damages, losses, expenses, costs, or liabilities whatsoever, including,
 without limitation, any direct or indirect damages for loss of profits.
+
+## Terminal copy-trading CLI (`fomo_cli`)
+
+Full reference with every formula: [docs/fomo_cli.md](docs/fomo_cli.md).
+
+Follows the FOMO.family leaderboard (top 30 overall + top 3 daily / 5 weekly / 10 monthly), classifies each
+trader (Trencher / Flipper / Holder, risk, conviction, thesis hit-rate) and copies buys only when tape,
+confluence or a reliable thesis backs them. Paper mode by default; live Solana swaps via Jupiter with `--live`.
+
+```
+cp fomo_cli.cfg.example fomo_cli.cfg      # set account_usd, sizing, FOMO_API_KEY (optional)
+venv/bin/python -m fomo_cli               # dashboard: ↑↓ + Enter opens a trader, f formulas, s scores all, w window, c copy loop, x close, q quit
+venv/bin/python -m fomo_cli top --score   # leaderboard with style/risk
+venv/bin/python -m fomo_cli trader unipcs # profile + every thesis with hit/miss
+venv/bin/python -m fomo_cli size unipcs --usd 20000   # the 3 sizing formulas with numbers plugged in
+venv/bin/python -m fomo_cli formulas      # every scoring / sizing / exit formula
+venv/bin/python -m fomo_cli watch         # live alerts from the follow set
+venv/bin/python -m fomo_cli copy          # paper copy loop; add --live for real Solana trades
+venv/bin/python -m fomo_cli shell         # interactive
+venv/bin/python -m fomo_cli.test_smoke    # self-check
+```
+
+Sizing formulas (`sizing=` in cfg): `fixed` (account × base% × style × risk), `kelly` (half-Kelly on thesis
+hit-rate and payoff), `conviction` (base × style × trade-size conviction × trader conviction × hit-rate).
+Exits: Trenchers time-stop (30m / -15% / +40%), Flippers scale out half at +50%, Holders stay until the trader
+sells or -35%. Safeguards: max open positions, daily loss limit, liquidity floor, ≤1% of pool, top-10 holder
+cap, deployer-exit check, trader paused on wallet change or when their buys keep marking local tops.
+
+Without `FOMO_API_KEY` the leaderboard and alert feed work (alerts 60s delayed); per-trader trades/theses need a
+free key (500 credits/mo, ~6 credits per trader, cached 24h).
