@@ -216,6 +216,7 @@ confluence or a reliable thesis backs them. Paper mode by default; live Solana s
 
 ```
 cp fomo_cli.cfg.example fomo_cli.cfg      # set account_usd, sizing, FOMO_API_KEY (optional)
+venv/bin/python -m fomo_cli               # dashboard: ↑↓ + Enter opens a trader, s scores all, w window, c copy loop, x close, q quit
 venv/bin/python -m fomo_cli top --score   # leaderboard with style/risk
 venv/bin/python -m fomo_cli trader unipcs # profile + every thesis with hit/miss
 venv/bin/python -m fomo_cli size unipcs --usd 20000   # the 3 sizing formulas

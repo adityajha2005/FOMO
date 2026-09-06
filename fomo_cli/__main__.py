@@ -7,6 +7,7 @@
   python -m fomo_cli watch                    live alert feed from the follow set
   python -m fomo_cli copy [--once] [--live]   run the copy loop (paper unless --live)
   python -m fomo_cli positions | close <id> | events | me
+  python -m fomo_cli ui                       full-screen dashboard (default when run with no args)
   python -m fomo_cli shell                    interactive: same commands, no prefix
 """
 import argparse
@@ -147,6 +148,7 @@ def parser():
     sub.add_parser("events")
     sub.add_parser("me")
     sub.add_parser("shell")
+    sub.add_parser("ui")
     return p
 
 
@@ -174,12 +176,16 @@ def run(argv, app):
         app.me()
     elif a.cmd == "shell":
         Shell(app).cmdloop()
+    elif a.cmd == "ui":
+        from .tui import run_tui
+
+        run_tui(app)
 
 
 def main():
     app = App()
     try:
-        run(sys.argv[1:] or ["shell"], app)
+        run(sys.argv[1:] or ["ui"], app)
     except ApiError as e:
         ui.console.print(f"[red]{e}[/]")
         sys.exit(1)
