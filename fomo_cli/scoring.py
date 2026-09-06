@@ -4,6 +4,7 @@ Payload shapes from FOMO vary by source (captured vs feed), so every field read 
 """
 import statistics
 import time
+from datetime import datetime
 
 STYLES = ("Trencher", "Flipper", "Holder")
 TRENCHER_MAX_H = 0.25  # < 15 minutes median hold
@@ -22,17 +23,26 @@ def _num(d, *keys, default=None):
 
 
 def _ts(d, *keys):
-    v = _num(d, *keys)
-    if v is None:
-        return None
-    return v / 1000 if v > 1e11 else v  # ms -> s
+    for k in keys:
+        v = d.get(k)
+        if v is None:
+            continue
+        if isinstance(v, str):
+            try:
+                return datetime.fromisoformat(v.replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                continue
+        v = float(v)
+        return v / 1000 if v > 1e11 else v  # ms -> s
+    return None
 
 
 def trade_stats(trades):
     pnls, sizes, holds = [], [], []
     for t in trades or []:
-        pnl = _num(t, "realizedPnlUsd", "pnlUsd", "pnl", "realizedPnl")
-        size = _num(t, "sizeUsd", "usdValue", "tradeUsd", "entryUsd", "costBasisUsd", "amountUsd")
+        closed = t.get("status", "closed") == "closed" or t.get("closedAt")
+        pnl = _num(t, "realizedPnlUsd", "pnlUsd", "pnl", "realizedPnl") if closed else None
+        size = _num(t, "sizeUsd", "usdValue", "tradeUsd", "buyUsd", "entryUsd", "costBasisUsd", "amountUsd")
         a = _ts(t, "entryTs", "openedAt", "firstBuyAt", "ts", "timestamp", "createdAt")
         b = _ts(t, "exitTs", "closedAt", "lastSellAt")
         if pnl is not None:
