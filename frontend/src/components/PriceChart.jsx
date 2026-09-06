@@ -1,7 +1,18 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CandlestickSeries, createChart, CrosshairMode } from "lightweight-charts";
 import { CHART_REFRESH_MS } from "../config/polling.js";
+import { LIVE_API_ENABLED } from "../config/api.js";
 import { getKlines } from "../services/binanceApi.js";
+import { binanceSymbolUrl, openExternal } from "../utils/links.js";
+
+const INTERVALS = [
+  { label: "1m", value: "1m" },
+  { label: "15m", value: "15m" },
+  { label: "1h", value: "1h" },
+  { label: "4h", value: "4h" },
+  { label: "1D", value: "1d" },
+  { label: "1W", value: "1w" },
+];
 
 function generateCandles(count = 120) {
   const candles = [];
@@ -23,10 +34,25 @@ function generateCandles(count = 120) {
   return candles;
 }
 
+function resolveBinanceSymbol(symbol, quoteMode) {
+  if (quoteMode === "btc") {
+    return "BTCUSDT";
+  }
+
+  const majors = ["BTC", "ETH", "SOL", "BNB", "DASH", "ADA", "ATOM", "XRP", "DOGE", "LTC"];
+  if (majors.includes(symbol)) {
+    return `${symbol}USDT`;
+  }
+
+  return "BTCUSDT";
+}
+
 export default function PriceChart({ symbol = "PONS", live = false }) {
   const containerRef = useRef(null);
   const seriesRef = useRef(null);
   const chartRef = useRef(null);
+  const [interval, setInterval] = useState("1d");
+  const [quoteMode, setQuoteMode] = useState("usd");
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -35,12 +61,12 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { color: "#0d0d0d" },
-        textColor: "#737373",
+        background: { color: "#0f1216" },
+        textColor: "#848e9c",
       },
       grid: {
-        vertLines: { color: "#171717" },
-        horzLines: { color: "#171717" },
+        vertLines: { color: "#1e2329" },
+        horzLines: { color: "#1e2329" },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -57,12 +83,12 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
     });
 
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: "#22c55e",
-      downColor: "#ef4444",
-      borderUpColor: "#22c55e",
-      borderDownColor: "#ef4444",
-      wickUpColor: "#22c55e",
-      wickDownColor: "#ef4444",
+      upColor: "#0ecb81",
+      downColor: "#f6465d",
+      borderUpColor: "#0ecb81",
+      borderDownColor: "#f6465d",
+      wickUpColor: "#0ecb81",
+      wickDownColor: "#f6465d",
     });
 
     chartRef.current = chart;
@@ -87,6 +113,10 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
   }, []);
 
   useEffect(() => {
+    if (!LIVE_API_ENABLED) {
+      return undefined;
+    }
+
     let active = true;
 
     async function loadCandles() {
@@ -94,11 +124,10 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
         return;
       }
 
+      const binanceSymbol = resolveBinanceSymbol(symbol, quoteMode);
+
       try {
-        const binanceSymbol = ["BTC", "ETH", "SOL", "BNB"].includes(symbol)
-          ? `${symbol}USDT`
-          : "BTCUSDT";
-        const candles = await getKlines(binanceSymbol, "1h", 120);
+        const candles = await getKlines(binanceSymbol, interval, 120);
 
         if (active && candles.length > 0) {
           seriesRef.current.setData(candles);
@@ -117,21 +146,40 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
       active = false;
       window.clearInterval(intervalId);
     };
-  }, [symbol]);
+  }, [symbol, interval, quoteMode]);
+
+  const chartPair = resolveBinanceSymbol(symbol, quoteMode).replace("USDT", "");
 
   return (
     <div className="chart-panel">
       <div className="chart-toolbar">
         <div className="chart-toolbar__left">
-          {["1m", "15m", "1h", "4h", "1D", "1W"].map((item) => (
-            <button key={item} type="button" className={item === "1D" ? "pill active" : "pill"}>
-              {item}
+          {INTERVALS.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={item.value === interval ? "pill active" : "pill"}
+              onClick={() => setInterval(item.value)}
+            >
+              {item.label}
             </button>
           ))}
         </div>
         <div className="chart-toolbar__right">
-          <button type="button" className="pill">{live ? "Live chart" : "Demo chart"}</button>
-          <button type="button" className="pill">USD / {symbol}</button>
+          <button
+            type="button"
+            className="pill pill--ghost"
+            onClick={() => openExternal(binanceSymbolUrl(chartPair))}
+          >
+            {live ? "Market data" : "Reference chart"}
+          </button>
+          <button
+            type="button"
+            className="pill"
+            onClick={() => setQuoteMode((current) => (current === "usd" ? "btc" : "usd"))}
+          >
+            {quoteMode === "usd" ? `${symbol}/USDT` : "BTC/USDT"}
+          </button>
         </div>
       </div>
       <div ref={containerRef} className="chart-canvas" />

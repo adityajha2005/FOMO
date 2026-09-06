@@ -116,7 +116,7 @@ def scouting_history():
 @app.route("/api/current_coin")
 def current_coin():
     coin = db.get_current_coin()
-    return coin.info() if coin else None
+    return jsonify(coin.info() if coin else None)
 
 
 @app.route("/api/current_coin_history")
@@ -135,7 +135,8 @@ def current_coin_history():
 def coins():
     session: Session
     with db.db_session() as session:
-        _current_coin = session.merge(db.get_current_coin())
+        current = db.get_current_coin()
+        _current_coin = session.merge(current) if current else None
         _coins: List[Coin] = session.query(Coin).all()
         return jsonify([{**coin.info(), "is_current": coin == _current_coin} for coin in _coins])
 

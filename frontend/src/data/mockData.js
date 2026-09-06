@@ -138,4 +138,11 @@ const TICKER = [
   { symbol: "USDT", price: "$1.00", change: "+0.01%", up: true },
 ];
 
-export { CLANS, HOLDERS, LEADERBOARD, TICKER };
+const TRENDING_TOKENS = [
+  { symbol: "PONS", name: "Pons", price: "$0.934", change: "+12.98%", changePositive: true },
+  { symbol: "BTC", name: "Bitcoin", price: "$84,221", change: "+2.31%", changePositive: true },
+  { symbol: "ETH", name: "Ethereum", price: "$2,241", change: "+1.84%", changePositive: true },
+  { symbol: "SOL", name: "Solana", price: "$132.12", change: "-0.42%", changePositive: false },
+];
+
+export { CLANS, HOLDERS, LEADERBOARD, TICKER, TRENDING_TOKENS };

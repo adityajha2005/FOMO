@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import { formatAlertTime } from "../utils/format.js";
-
-const CLAN_COLORS = ["#f97316", "#8b5cf6", "#06b6d4", "#22c55e", "#eab308", "#ec4899"];
+import { fomoTraderUrl, openExternal } from "../utils/links.js";
+import { getTrendingTokens, mapTrendingToken } from "../services/fomoApi.js";
+import { TRENDING_TOKENS } from "../data/mockData.js";
+import { LIVE_API_ENABLED } from "../config/api.js";
 
 function Avatar({ url, initials, className = "avatar avatar--sm" }) {
   if (url) {
@@ -11,7 +14,7 @@ function Avatar({ url, initials, className = "avatar avatar--sm" }) {
     );
   }
 
-  return <div className={className}>{initials}</div>;
+  return <div className={`${className} avatar--fallback`}>{initials}</div>;
 }
 
 const tabs = ["Alerts", "Tokens", "Leaderboard", "Feed"];
@@ -20,6 +23,7 @@ export default function LeftSidebar({
   activeTab = "Leaderboard",
   onTabChange,
   clans = [],
+  allClans = [],
   leaderboard = [],
   alerts = [],
   alertsConnected = false,
@@ -28,6 +32,93 @@ export default function LeftSidebar({
   error = null,
   liveSource = null,
 }) {
+  const [showAllClans, setShowAllClans] = useState(false);
+  const [showAllLeaderboard, setShowAllLeaderboard] = useState(false);
+  const [trendingTokens, setTrendingTokens] = useState([]);
+  const [tokensLoading, setTokensLoading] = useState(false);
+
+  const visibleClans = showAllClans ? allClans : clans;
+  const visibleLeaderboard = showAllLeaderboard ? leaderboard : leaderboard.slice(0, 10);
+
+  useEffect(() => {
+    if (activeTab !== "Tokens") {
+      return undefined;
+    }
+
+    if (!LIVE_API_ENABLED) {
+      setTrendingTokens(TRENDING_TOKENS);
+      setTokensLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setTokensLoading(true);
+
+    getTrendingTokens()
+      .then((tokens) => {
+        if (active) {
+          setTrendingTokens(tokens.map(mapTrendingToken));
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setTrendingTokens([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setTokensLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeTab]);
+
+  function openTrader(handle) {
+    openExternal(fomoTraderUrl(handle));
+  }
+
+  function renderAlerts() {
+    return (
+      <section className="sidebar-section sidebar-section--grow">
+        <div className="sidebar-section__header">
+          <h3>Activity feed</h3>
+          <span className={`status-chip ${alertsConnected ? "status-chip--live" : ""}`}>
+            {alertsConnected ? "Live" : "Connecting"}
+            {alertsDelaySeconds ? ` · ${alertsDelaySeconds}s` : ""}
+          </span>
+        </div>
+
+        <div className="alerts-list">
+          {alerts.length === 0 ? (
+            <p className="sidebar-status">Waiting for market activity...</p>
+          ) : (
+            alerts.map((alert) => (
+              <button
+                key={alert.id || `${alert.trader}-${alert.ts}`}
+                type="button"
+                className="alert-item alert-item--clickable"
+                onClick={() => alert.trader && openTrader(alert.trader)}
+              >
+                <div className={`alert-item__side ${alert.type || alert.alertType || "buy"}`}>
+                  {(alert.type || alert.alertType || "trade").toUpperCase()}
+                </div>
+                <div className="alert-item__body">
+                  <strong>{alert.text || `${alert.trader} ${alert.type} ${alert.token}`}</strong>
+                  <span>
+                    {alert.trader} · {alert.token} · {formatAlertTime(alert.ts)}
+                  </span>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <aside className="left-sidebar">
       <nav className="sidebar-tabs">
@@ -43,101 +134,111 @@ export default function LeftSidebar({
         ))}
       </nav>
 
-      {activeTab === "Alerts" ? (
+      {activeTab === "Alerts" || activeTab === "Feed" ? renderAlerts() : null}
+
+      {activeTab === "Tokens" ? (
         <section className="sidebar-section sidebar-section--grow">
           <div className="sidebar-section__header">
-            <h3>Live feed</h3>
-            <span className="sidebar-live-pill">
-              {alertsConnected ? "Connected" : "Connecting"}
-              {alertsDelaySeconds ? ` · ${alertsDelaySeconds}s delay` : ""}
-            </span>
+            <h3>Trending</h3>
+            <a className="link-btn" href="https://fomo.family" target="_blank" rel="noreferrer">
+              Market
+            </a>
           </div>
 
-          <div className="alerts-list">
-            {alerts.length === 0 ? (
-              <p className="sidebar-status">Waiting for live trades...</p>
-            ) : (
-              alerts.map((alert) => (
-                <div key={alert.id || `${alert.trader}-${alert.ts}`} className="alert-item">
-                  <div className={`alert-item__type ${alert.type || alert.alertType || "buy"}`}>
-                    {(alert.type || alert.alertType || "trade").toUpperCase()}
-                  </div>
-                  <div className="alert-item__body">
-                    <strong>{alert.text || `${alert.trader} ${alert.type} ${alert.token}`}</strong>
-                    <span>
-                      {alert.trader} · {alert.token} · {formatAlertTime(alert.ts)}
-                    </span>
-                  </div>
+          <div className="data-list">
+            {tokensLoading ? <p className="sidebar-status">Loading market data...</p> : null}
+            {!tokensLoading && trendingTokens.length === 0 ? (
+              <p className="sidebar-status">Trending data unavailable.</p>
+            ) : null}
+            {trendingTokens.map((token) => (
+              <a
+                key={token.address || token.symbol}
+                className="data-list__row data-list__row--link"
+                href={`https://fomo.family/token/${encodeURIComponent(token.symbol)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <div className="data-list__primary">
+                  <strong>{token.symbol}</strong>
+                  <span>{token.name}</span>
                 </div>
-              ))
-            )}
+                <div className="data-list__metrics">
+                  <span className="num">{token.price}</span>
+                  <span className={`num ${token.changePositive ? "positive" : "negative"}`}>{token.change}</span>
+                </div>
+              </a>
+            ))}
           </div>
         </section>
       ) : null}
 
-      {activeTab !== "Alerts" ? (
+      {activeTab === "Leaderboard" ? (
         <>
           <section className="sidebar-section">
             <div className="sidebar-section__header">
               <h3>Clans</h3>
-              <button type="button" className="link-btn">View all</button>
+              <button type="button" className="link-btn" onClick={() => setShowAllClans((current) => !current)}>
+                {showAllClans ? "Less" : "All"}
+              </button>
             </div>
 
             {error ? <p className="sidebar-status sidebar-status--error">{error}</p> : null}
-            {liveSource ? <p className="sidebar-status">Live via {liveSource}</p> : null}
+            {liveSource ? <p className="sidebar-status">Source: {liveSource}</p> : null}
 
-            <div className="clans-grid">
-              {loading && clans.length === 0
+            <div className="data-list">
+              {loading && visibleClans.length === 0
                 ? Array.from({ length: 4 }, (_, index) => (
-                    <div key={index} className="clan-card clan-card--loading" />
+                    <div key={index} className="data-list__row data-list__row--loading" />
                   ))
-                : clans.map((clan, index) => (
-                    <div key={clan.id || clan.name} className="clan-card">
-                      <div
-                        className="clan-card__avatar"
-                        style={clan.avatarUrl ? undefined : { background: CLAN_COLORS[index % CLAN_COLORS.length] }}
-                      >
-                        {clan.avatarUrl ? (
-                          <img src={clan.avatarUrl} alt="" loading="lazy" />
-                        ) : (
-                          clan.initials
-                        )}
-                      </div>
-                      <div className="clan-card__meta">
+                : visibleClans.map((clan) => (
+                    <button
+                      key={clan.id || clan.name}
+                      type="button"
+                      className="data-list__row data-list__row--button"
+                      onClick={() => openExternal("https://fomo.family/clans")}
+                    >
+                      <div className="data-list__primary">
                         <strong>{clan.name}</strong>
                         <span>{clan.members} members</span>
                       </div>
-                      <div className={clan.pnlRaw >= 0 ? "clan-card__pnl positive" : "clan-card__pnl negative"}>
-                        {clan.pnl}
-                      </div>
-                    </div>
+                      <span className={`num ${clan.pnlRaw >= 0 ? "positive" : "negative"}`}>{clan.pnl}</span>
+                    </button>
                   ))}
             </div>
           </section>
 
           <section className="sidebar-section sidebar-section--grow">
             <div className="sidebar-section__header">
-              <h3>Leaderboard</h3>
-              <button type="button" className="link-btn">View all</button>
+              <h3>Top traders</h3>
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => setShowAllLeaderboard((current) => !current)}
+              >
+                {showAllLeaderboard ? "Less" : "All"}
+              </button>
             </div>
 
-            <div className="leaderboard-list">
-              {loading && leaderboard.length === 0 ? (
-                <p className="sidebar-status">Loading live leaderboard...</p>
+            <div className="data-list data-list--ranked">
+              {loading && visibleLeaderboard.length === 0 ? (
+                <p className="sidebar-status">Loading rankings...</p>
               ) : null}
 
-              {leaderboard.map((entry) => (
-                <div key={entry.id || entry.rank} className="leaderboard-item">
-                  <span className="leaderboard-item__rank">{entry.rank}</span>
+              {visibleLeaderboard.map((entry) => (
+                <button
+                  key={entry.id || entry.rank}
+                  type="button"
+                  className="data-list__row data-list__row--button data-list__row--ranked"
+                  onClick={() => openTrader(entry.handle || entry.name)}
+                >
+                  <span className="data-list__rank num">{entry.rank}</span>
                   <Avatar url={entry.avatarUrl} initials={entry.initials} />
-                  <div className="leaderboard-item__info">
+                  <div className="data-list__primary">
                     <strong>{entry.name}</strong>
                     <span>{entry.handle}</span>
                   </div>
-                  <div className={entry.pnlRaw >= 0 ? "leaderboard-item__pnl positive" : "leaderboard-item__pnl negative"}>
-                    {entry.pnl}
-                  </div>
-                </div>
+                  <span className={`num ${entry.pnlRaw >= 0 ? "positive" : "negative"}`}>{entry.pnl}</span>
+                </button>
               ))}
             </div>
           </section>
