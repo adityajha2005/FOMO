@@ -37,7 +37,7 @@ class Config:
     @classmethod
     def load(cls) -> "Config":
         c = cls()
-        ini = configparser.ConfigParser()
+        ini = configparser.ConfigParser(inline_comment_prefixes=(";", "#"))
         if CFG_PATH.exists():
             ini.read(CFG_PATH)
             sec = ini["fomo"] if "fomo" in ini else {}
