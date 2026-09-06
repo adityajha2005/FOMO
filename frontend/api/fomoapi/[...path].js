@@ -1,29 +1,42 @@
-export default async function handler(req, res) {
-  const segments = req.query.path;
-  const path = Array.isArray(segments) ? segments.join("/") : segments || "";
+export const config = { runtime: "edge" };
 
-  const requestUrl = new URL(req.url, `http://${req.headers.host}`);
-  requestUrl.searchParams.delete("path");
-  const search = requestUrl.search;
+function isKeylessPath(path) {
+  const normalized = path.replace(/^\/+/, "");
+  return (
+    normalized.startsWith("v2/leaderboard/") ||
+    normalized.startsWith("v2/alerts") ||
+    normalized === "v1" ||
+    normalized.startsWith("v1/") ||
+    normalized === "health"
+  );
+}
 
-  const targetUrl = `https://api.fomoapi.io/${path}${search}`;
-  const headers = {};
+export default async function handler(request) {
+  const url = new URL(request.url);
+  const path = url.pathname.replace(/^\/api\/fomoapi\/?/, "");
+  const targetUrl = `https://api.fomoapi.io/${path}${url.search}`;
 
-  if (process.env.FOMO_API_KEY) {
-    headers.Authorization = `Bearer ${process.env.FOMO_API_KEY}`;
+  const headers = new Headers();
+  const useKey = process.env.FOMO_API_KEY && !isKeylessPath(path);
+
+  if (useKey) {
+    headers.set("Authorization", `Bearer ${process.env.FOMO_API_KEY}`);
   }
 
   try {
-    const upstream = await fetch(targetUrl, {
-      method: req.method,
-      headers,
-    });
-
+    const upstream = await fetch(targetUrl, { method: request.method, headers });
     const body = await upstream.text();
-    const contentType = upstream.headers.get("content-type") || "application/json";
 
-    res.status(upstream.status).setHeader("Content-Type", contentType).send(body);
+    return new Response(body, {
+      status: upstream.status,
+      headers: {
+        "Content-Type": upstream.headers.get("content-type") || "application/json",
+      },
+    });
   } catch (error) {
-    res.status(502).json({ error: "Could not reach FOMO API", message: error.message });
+    return Response.json(
+      { error: "Could not reach FOMO API", message: error.message },
+      { status: 502 },
+    );
   }
 }

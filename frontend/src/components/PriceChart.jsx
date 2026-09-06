@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { CandlestickSeries, createChart, CrosshairMode } from "lightweight-charts";
+import { CHART_REFRESH_MS } from "../config/polling.js";
 import { getKlines } from "../services/binanceApi.js";
 
 function generateCandles(count = 120) {
@@ -110,7 +111,7 @@ export default function PriceChart({ symbol = "PONS", live = false }) {
     }
 
     loadCandles();
-    const intervalId = window.setInterval(loadCandles, 60_000);
+    const intervalId = window.setInterval(loadCandles, CHART_REFRESH_MS);
 
     return () => {
       active = false;

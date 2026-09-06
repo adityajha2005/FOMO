@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { getAlerts } from "../services/fomoApi.js";
 
 const MAX_ALERTS = 40;
 const WS_URL = "wss://api.fomoapi.io/ws/alerts";
 
-export function useFomoAlerts({ enabled = true, apiKey = "" } = {}) {
+export function useFomoAlerts({ enabled = true } = {}) {
   const [alerts, setAlerts] = useState([]);
   const [connected, setConnected] = useState(false);
   const [delaySeconds, setDelaySeconds] = useState(null);
@@ -16,17 +15,7 @@ export function useFomoAlerts({ enabled = true, apiKey = "" } = {}) {
     }
 
     let active = true;
-
-    getAlerts({ limit: 20 })
-      .then((initialAlerts) => {
-        if (active) {
-          setAlerts(initialAlerts);
-        }
-      })
-      .catch(() => {});
-
-    const wsUrl = apiKey ? `${WS_URL}?key=${encodeURIComponent(apiKey)}` : WS_URL;
-    const socket = new WebSocket(wsUrl);
+    const socket = new WebSocket(WS_URL);
     socketRef.current = socket;
 
     socket.onopen = () => {
@@ -69,7 +58,7 @@ export function useFomoAlerts({ enabled = true, apiKey = "" } = {}) {
       socket.close();
       socketRef.current = null;
     };
-  }, [enabled, apiKey]);
+  }, [enabled]);
 
   return { alerts, connected, delaySeconds };
 }

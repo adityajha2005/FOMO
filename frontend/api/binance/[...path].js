@@ -1,20 +1,24 @@
-export default async function handler(req, res) {
-  const segments = req.query.path;
-  const path = Array.isArray(segments) ? segments.join("/") : segments || "";
+export const config = { runtime: "edge" };
 
-  const requestUrl = new URL(req.url, `http://${req.headers.host}`);
-  requestUrl.searchParams.delete("path");
-  const search = requestUrl.search;
-
-  const targetUrl = `https://api.binance.com/${path}${search}`;
+export default async function handler(request) {
+  const url = new URL(request.url);
+  const path = url.pathname.replace(/^\/api\/binance\/?/, "");
+  const targetUrl = `https://api.binance.com/${path}${url.search}`;
 
   try {
-    const upstream = await fetch(targetUrl, { method: req.method });
+    const upstream = await fetch(targetUrl, { method: request.method });
     const body = await upstream.text();
-    const contentType = upstream.headers.get("content-type") || "application/json";
 
-    res.status(upstream.status).setHeader("Content-Type", contentType).send(body);
+    return new Response(body, {
+      status: upstream.status,
+      headers: {
+        "Content-Type": upstream.headers.get("content-type") || "application/json",
+      },
+    });
   } catch (error) {
-    res.status(502).json({ error: "Could not reach Binance API", message: error.message });
+    return Response.json(
+      { error: "Could not reach Binance API", message: error.message },
+      { status: 502 },
+    );
   }
 }

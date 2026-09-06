@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import FooterTicker from "../components/FooterTicker.jsx";
 import HoldersTable from "../components/HoldersTable.jsx";
 import LeftSidebar from "../components/LeftSidebar.jsx";
 import PriceChart from "../components/PriceChart.jsx";
 import TopNav from "../components/TopNav.jsx";
 import TradePanel from "../components/TradePanel.jsx";
+import { LEADERBOARD_REFRESH_MS, TOKEN_REFRESH_MS } from "../config/polling.js";
 import { CLANS, HOLDERS, LEADERBOARD } from "../data/mockData.js";
 import { useFomoAlerts } from "../hooks/useFomoAlerts.js";
 import { api } from "../services/api.js";
 import {
-  getClanLeaderboard,
   getLeaderboard,
   getTokenHolders,
   getTokenStats,
@@ -48,21 +48,22 @@ export default function TradingDashboard() {
   const [holderRows, setHolderRows] = useState(HOLDERS);
   const [thesisRows, setThesisRows] = useState([]);
   const [tokenLoading, setTokenLoading] = useState(false);
+  const [thesisLoading, setThesisLoading] = useState(false);
   const [tokenLive, setTokenLive] = useState(false);
   const [chartLive, setChartLive] = useState(false);
+  const [thesisLoaded, setThesisLoaded] = useState(false);
+
+  const tokenCacheRef = useRef(null);
 
   const symbol = currentCoin?.symbol || DEFAULT_TOKEN;
 
   const { alerts, connected: alertsConnected, delaySeconds: alertsDelaySeconds } = useFomoAlerts({
-    enabled: true,
+    enabled: activeTab === "Alerts",
   });
 
   const loadLeaderboard = useCallback(async () => {
     try {
-      const [{ traders, source }, { clans: liveClans }] = await Promise.all([
-        getLeaderboard({ window: "7d", limit: 50 }),
-        getClanLeaderboard({ window: "7d", limit: 50 }),
-      ]);
+      const { traders, clans: liveClans, source } = await getLeaderboard({ window: "7d", limit: 50 });
 
       setLeaderboard(traders);
       setClans(liveClans.slice(0, 4));
@@ -77,47 +78,83 @@ export default function TradingDashboard() {
     }
   }, []);
 
+  const resolveToken = useCallback(async () => {
+    if (tokenCacheRef.current?.query === symbol) {
+      return tokenCacheRef.current.token;
+    }
+
+    const token = await searchToken(symbol);
+    if (!token?.address) {
+      throw new Error("Token not found");
+    }
+
+    tokenCacheRef.current = { query: symbol, token };
+    return token;
+  }, [symbol]);
+
   const loadTokenData = useCallback(async () => {
     setTokenLoading(true);
 
     try {
-      const token = await searchToken(symbol);
-      if (!token?.address) {
-        throw new Error("Token not found");
-      }
+      const token = await resolveToken();
 
-      const [holders, stats, theses] = await Promise.all([
+      const [holders, stats] = await Promise.all([
         getTokenHolders(token.address, { limit: 20, networkId: token.networkId }),
         getTokenStats(token.address, { networkId: token.networkId }),
-        getTokenTheses(token.address, { limit: 20, networkId: token.networkId }),
       ]);
 
       setTokenStats(mapTokenStats(token, stats));
       setHolderRows(holders.map((row) => mapHolderRow(row, symbol)));
-      setThesisRows(theses.map(mapThesisRow));
       setTokenLive(true);
       setChartLive(true);
     } catch {
       setTokenLive(false);
       setTokenStats(FALLBACK_TOKEN_STATS);
       setHolderRows(HOLDERS);
-      setThesisRows([]);
     } finally {
       setTokenLoading(false);
     }
-  }, [symbol]);
+  }, [resolveToken, symbol]);
+
+  const loadThesisData = useCallback(async () => {
+    if (thesisLoaded) {
+      return;
+    }
+
+    setThesisLoading(true);
+
+    try {
+      const token = await resolveToken();
+      const theses = await getTokenTheses(token.address, { limit: 20, networkId: token.networkId });
+      setThesisRows(theses.map(mapThesisRow));
+      setThesisLoaded(true);
+    } catch {
+      setThesisRows([]);
+    } finally {
+      setThesisLoading(false);
+    }
+  }, [resolveToken, thesisLoaded]);
 
   useEffect(() => {
     loadLeaderboard();
-    const intervalId = window.setInterval(loadLeaderboard, 60_000);
+    const intervalId = window.setInterval(loadLeaderboard, LEADERBOARD_REFRESH_MS);
     return () => window.clearInterval(intervalId);
   }, [loadLeaderboard]);
 
   useEffect(() => {
+    tokenCacheRef.current = null;
+    setThesisLoaded(false);
+    setThesisRows([]);
     loadTokenData();
-    const intervalId = window.setInterval(loadTokenData, 60_000);
+    const intervalId = window.setInterval(loadTokenData, TOKEN_REFRESH_MS);
     return () => window.clearInterval(intervalId);
-  }, [loadTokenData]);
+  }, [loadTokenData, symbol]);
+
+  useEffect(() => {
+    if (holdersTab === "thesis") {
+      loadThesisData();
+    }
+  }, [holdersTab, loadThesisData]);
 
   useEffect(() => {
     let active = true;
@@ -147,15 +184,14 @@ export default function TradingDashboard() {
     }
 
     loadBotData();
-    const intervalId = window.setInterval(loadBotData, 30_000);
 
     return () => {
       active = false;
-      window.clearInterval(intervalId);
     };
   }, []);
 
   const tableRows = holdersTab === "thesis" ? thesisRows : holderRows;
+  const tableLoading = holdersTab === "thesis" ? thesisLoading : tokenLoading;
 
   return (
     <div className="dashboard-shell">
@@ -213,7 +249,7 @@ export default function TradingDashboard() {
             activeTab={holdersTab}
             onTabChange={setHoldersTab}
             holderCount={tokenStats.holderCount}
-            loading={tokenLoading}
+            loading={tableLoading}
           />
         </main>
 

@@ -15,7 +15,15 @@ export default defineConfig(({ mode }) => {
           rewrite: (path) => path.replace(/^\/api\/fomoapi/, ""),
           configure: (proxy) => {
             proxy.on("proxyReq", (proxyReq) => {
-              if (env.FOMO_API_KEY) {
+              const upstreamPath = proxyReq.path.replace(/^\/api\/fomoapi\/?/, "");
+              const keyless =
+                upstreamPath.startsWith("/v2/leaderboard/") ||
+                upstreamPath.startsWith("/v2/alerts") ||
+                upstreamPath === "/v1" ||
+                upstreamPath.startsWith("/v1/") ||
+                upstreamPath === "/health";
+
+              if (env.FOMO_API_KEY && !keyless) {
                 proxyReq.setHeader("Authorization", `Bearer ${env.FOMO_API_KEY}`);
               }
             });

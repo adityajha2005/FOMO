@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { TICKER_REFRESH_MS } from "../config/polling.js";
 import { getMarketTicker } from "../services/binanceApi.js";
 import { TICKER } from "../data/mockData.js";
 
@@ -24,7 +25,7 @@ export default function FooterTicker() {
     }
 
     loadTicker();
-    const intervalId = window.setInterval(loadTicker, 15_000);
+    const intervalId = window.setInterval(loadTicker, TICKER_REFRESH_MS);
 
     return () => {
       active = false;

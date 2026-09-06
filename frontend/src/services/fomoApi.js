@@ -95,24 +95,6 @@ export async function getTraderLeaderboard({ window = "7d", limit = 50 } = {}) {
   return (payload.traders ?? []).map(mapTraderEntry);
 }
 
-async function getClanLeaderboardFromApp({ window = "7d", limit = 50 } = {}) {
-  const params = new URLSearchParams({ window, limit: String(limit) });
-  const response = await fetch(`${API_BASE}/api/fomo/v2/clans/leaderboard?${params}`);
-
-  let payload = null;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!response.ok || !payload?.success) {
-    throw new Error(payload?.message || payload?.error || "Clan leaderboard unavailable");
-  }
-
-  return (payload.responseObject?.leaderboard ?? []).map(mapClanEntry);
-}
-
 export async function getLeaderboard(options = {}) {
   const traders = await getTraderLeaderboard(options);
   const clans = aggregateClansFromTraders(traders);
@@ -121,13 +103,8 @@ export async function getLeaderboard(options = {}) {
 }
 
 export async function getClanLeaderboard(options = {}) {
-  try {
-    const clans = await getClanLeaderboardFromApp(options);
-    return { clans, source: "fomo-app" };
-  } catch {
-    const traders = await getTraderLeaderboard(options);
-    return { clans: aggregateClansFromTraders(traders), source: "fomoapi-derived" };
-  }
+  const traders = await getTraderLeaderboard(options);
+  return { clans: aggregateClansFromTraders(traders), source: "fomoapi-derived" };
 }
 
 export async function getAlerts({ limit = 30 } = {}) {
