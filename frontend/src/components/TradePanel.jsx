@@ -1,25 +1,54 @@
+import { useState } from "react";
+import {
+  binanceTradeUrl,
+  fomoTokenUrl,
+  openExternal,
+  xSearchUrl,
+} from "../utils/links.js";
+
 export default function TradePanel({
   symbol = "PONS",
+  fomoSymbol = "PONS",
   side,
   onSideChange,
   tokenStats = null,
   aboutText = null,
+  botOnline = false,
 }) {
+  const [amount, setAmount] = useState("0.00");
+
   const performance = tokenStats?.performance || {
-    "5M": "+0.8%",
-    "1H": "+2.4%",
-    "4H": "+6.1%",
-    "1D": tokenStats?.change || "+12.98%",
+    "5M": "—",
+    "1H": "—",
+    "4H": "—",
+    "1D": tokenStats?.change || "—",
   };
 
-  const buys = tokenStats?.sentiment?.buys ?? 1204;
-  const sells = tokenStats?.sentiment?.sells ?? 566;
+  const buys = tokenStats?.sentiment?.buys ?? 0;
+  const sells = tokenStats?.sentiment?.sells ?? 0;
   const total = buys + sells || 1;
   const buyPct = Math.round((buys / total) * 100);
   const sellPct = 100 - buyPct;
 
+  function setQuickAmount(value) {
+    setAmount(Number(value).toFixed(2));
+  }
+
+  function handleTrade() {
+    openExternal(fomoTokenUrl(fomoSymbol));
+  }
+
+  function handleBotExecution() {
+    openExternal(binanceTradeUrl(symbol));
+  }
+
   return (
     <aside className="trade-panel">
+      <div className="panel-heading">
+        <h3>Order entry</h3>
+        <span className="status-chip">{fomoSymbol}/USD</span>
+      </div>
+
       <div className="trade-toggle">
         <button
           type="button"
@@ -37,51 +66,66 @@ export default function TradePanel({
         </button>
       </div>
 
-      <label className="field-label">Amount</label>
+      <label className="field-label">Notional (USD)</label>
       <div className="amount-input">
-        <input defaultValue="0.00" />
+        <input
+          value={amount}
+          onChange={(event) => setAmount(event.target.value)}
+          inputMode="decimal"
+          className="num"
+        />
         <span>USD</span>
       </div>
 
       <div className="quick-amounts">
-        {["$10", "$100", "$500", "$1000"].map((amount) => (
-          <button key={amount} type="button" className="quick-amounts__btn">
-            {amount}
+        {[10, 100, 500, 1000].map((value) => (
+          <button key={value} type="button" className="quick-amounts__btn num" onClick={() => setQuickAmount(value)}>
+            ${value}
           </button>
         ))}
       </div>
 
-      <button type="button" className={`action-btn ${side}`}>
-        {side === "buy" ? `Buy ${symbol}` : `Sell ${symbol}`}
+      <button type="button" className={`action-btn ${side}`} onClick={handleTrade}>
+        {side === "buy" ? `Buy ${fomoSymbol}` : `Sell ${fomoSymbol}`}
       </button>
 
+      {botOnline && symbol !== fomoSymbol ? (
+        <button type="button" className="secondary-btn" onClick={handleBotExecution}>
+          Bot execution: {symbol} on Binance
+        </button>
+      ) : null}
+
       <section className="about-panel">
-        <h4>About</h4>
+        <div className="panel-heading">
+          <h4>Market overview</h4>
+        </div>
         <p>
           {aboutText ||
-            "Automated bridge rotation bot tracking supported altcoins and swapping into stronger momentum when ratio thresholds are met."}
+            "Social trading terminal connected to live FOMO market data. Execution routes to the official FOMO platform."}
         </p>
 
         <div className="perf-grid">
           {Object.entries(performance).map(([label, value]) => (
             <div key={label} className="perf-grid__item">
               <span>{label}</span>
-              <strong className={String(value).startsWith("+") ? "positive" : "negative"}>{value}</strong>
+              <strong className={`num ${String(value).startsWith("+") ? "positive" : String(value).startsWith("-") ? "negative" : ""}`}>
+                {value}
+              </strong>
             </div>
           ))}
         </div>
 
         <div className="sentiment-block">
           <div className="sentiment-row">
-            <span>Buys</span>
-            <strong>{buys.toLocaleString()}</strong>
+            <span>Buy volume (24h)</span>
+            <strong className="num">{buys.toLocaleString()}</strong>
           </div>
           <div className="progress-bar">
             <div className="progress-bar__buy" style={{ width: `${buyPct}%` }} />
           </div>
           <div className="sentiment-row">
-            <span>Sells</span>
-            <strong>{sells.toLocaleString()}</strong>
+            <span>Sell volume (24h)</span>
+            <strong className="num">{sells.toLocaleString()}</strong>
           </div>
           <div className="progress-bar">
             <div className="progress-bar__sell" style={{ width: `${sellPct}%` }} />
@@ -89,9 +133,15 @@ export default function TradePanel({
         </div>
 
         <div className="social-links">
-          <button type="button" className="social-links__btn">Website</button>
-          <button type="button" className="social-links__btn">Twitter</button>
-          <button type="button" className="social-links__btn">Search on X</button>
+          <a className="social-links__btn" href={fomoTokenUrl(fomoSymbol)} target="_blank" rel="noreferrer">
+            Token page
+          </a>
+          <a className="social-links__btn" href={xSearchUrl(`$${fomoSymbol}`)} target="_blank" rel="noreferrer">
+            X feed
+          </a>
+          <a className="social-links__btn" href={xSearchUrl(fomoSymbol)} target="_blank" rel="noreferrer">
+            Search
+          </a>
         </div>
       </section>
     </aside>

@@ -1,8 +1,15 @@
+import { CACHE_TTL, KNOWN_TOKENS } from "../config/polling.js";
+import { LIVE_API_ENABLED } from "../config/api.js";
+import { fetchWithCache } from "../utils/fomoCache.js";
 import { formatPnl, formatUsd, formatPercent } from "../utils/format.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 async function fomoapiRequest(path, { requireKey = false } = {}) {
+  if (!LIVE_API_ENABLED) {
+    throw new Error("Live API disabled ? UI preview mode");
+  }
+
   const response = await fetch(`${API_BASE}/api/fomoapi${path}`);
   let payload = null;
 
@@ -89,10 +96,13 @@ export function aggregateClansFromTraders(traders) {
     .map((clan, index) => mapClanEntry({ ...clan, rank: index + 1 }));
 }
 
-export async function getTraderLeaderboard({ window = "7d", limit = 50 } = {}) {
-  const params = new URLSearchParams({ limit: String(limit) });
-  const payload = await fomoapiRequest(`/v2/leaderboard/${window}?${params}`);
-  return (payload.traders ?? []).map(mapTraderEntry);
+export async function getTraderLeaderboard({ window = "7d", limit = 30 } = {}) {
+  const cacheKey = `fomo:leaderboard:${window}:${limit}`;
+  return fetchWithCache(cacheKey, async () => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    const payload = await fomoapiRequest(`/v2/leaderboard/${window}?${params}`);
+    return (payload.traders ?? []).map(mapTraderEntry);
+  }, CACHE_TTL.leaderboard);
 }
 
 export async function getLeaderboard(options = {}) {
@@ -108,30 +118,165 @@ export async function getClanLeaderboard(options = {}) {
 }
 
 export async function getAlerts({ limit = 30 } = {}) {
-  const params = new URLSearchParams({ limit: String(limit) });
-  const payload = await fomoapiRequest(`/v2/alerts?${params}`);
-  return payload.alerts ?? [];
+  const cacheKey = `fomo:alerts:${limit}`;
+  return fetchWithCache(cacheKey, async () => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    const payload = await fomoapiRequest(`/v2/alerts?${params}`);
+    return payload.alerts ?? [];
+  }, CACHE_TTL.default);
+}
+
+async function loadTrendingTokens() {
+  const cacheKey = "fomo:trending-tokens:50";
+  return fetchWithCache(cacheKey, async () => {
+    const payload = await fomoapiRequest("/v2/leaderboard/tokens/trending?limit=50", { requireKey: true });
+    return payload.tokens ?? [];
+  }, CACHE_TTL.leaderboard);
+}
+
+async function getTrendingTokenByAddress(address) {
+  const tokens = await loadTrendingTokens();
+  return (
+    tokens.find((entry) => {
+      const entryAddress = entry.token?.address || entry.address;
+      return entryAddress?.toLowerCase() === address.toLowerCase();
+    }) ?? null
+  );
+}
+
+export async function getTrendingTokens() {
+  return loadTrendingTokens();
+}
+
+export async function searchUnified(query, { limit = 8 } = {}) {
+  const cacheKey = `fomo:search:${query.toLowerCase()}:${limit}`;
+  return fetchWithCache(cacheKey, async () => {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    const payload = await fomoapiRequest(`/v2/search?${params}`, { requireKey: true });
+    return payload.results ?? [];
+  }, CACHE_TTL.search);
+}
+
+export function mapTrendingToken(entry) {
+  const token = entry.token ?? entry;
+  const change24h = entry.change24h ?? 0;
+
+  return {
+    symbol: token.symbol || "???",
+    name: token.name || token.symbol || "Unknown",
+    address: token.address || null,
+    price: entry.priceUsd != null ? formatUsd(entry.priceUsd, { decimals: 3 }) : "?",
+    change: formatPercent(change24h),
+    changePositive: change24h >= 0,
+    marketCap: entry.marketCapUsd != null ? formatUsd(entry.marketCapUsd, { compact: true }) : "?",
+    holders: entry.holders ?? null,
+    rank: entry.rank ?? null,
+  };
+}
+
+function enrichTokenMetadata(token, { marketSnapshot, holderPriceUsd } = {}) {
+  return {
+    ...token,
+    image: marketSnapshot?.image ?? token.image ?? token.imageUrl ?? null,
+    priceUsd: marketSnapshot?.priceUsd ?? token.priceUsd ?? holderPriceUsd ?? null,
+    marketCapUsd: marketSnapshot?.marketCapUsd ?? token.marketCapUsd ?? null,
+    change24h: marketSnapshot?.change24h ?? token.change24h ?? null,
+    volume24hUsd: marketSnapshot?.volume24hUsd ?? token.volume24hUsd ?? null,
+  };
+}
+
+export async function resolveToken(symbol) {
+  const known = KNOWN_TOKENS[symbol?.toUpperCase()];
+  if (known) {
+    return known;
+  }
+
+  return searchToken(symbol);
 }
 
 export async function searchToken(query) {
-  const params = new URLSearchParams({ q: query, limit: "1" });
-  const payload = await fomoapiRequest(`/v2/tokens/search?${params}`, { requireKey: true });
-  return payload.tokens?.[0] || payload.results?.[0] || null;
+  const cacheKey = `fomo:token-search:${query}`;
+  return fetchWithCache(cacheKey, async () => {
+    const params = new URLSearchParams({ q: query, limit: "1" });
+    const payload = await fomoapiRequest(`/v2/tokens/search?${params}`, { requireKey: true });
+    return payload.tokens?.[0] || payload.results?.[0] || null;
+  }, CACHE_TTL.tokenSearch);
 }
 
-export async function getTokenHolders(address, { limit = 20, networkId } = {}) {
-  const params = new URLSearchParams({ limit: String(limit) });
-  if (networkId) {
-    params.set("networkId", String(networkId));
-  }
+export async function getTokenBundle(symbol) {
+  const cacheKey = `fomo:token-bundle:v3:${symbol}`;
+  return fetchWithCache(cacheKey, async () => {
+    const token = await resolveToken(symbol);
+    if (!token?.address) {
+      throw new Error("Token not found");
+    }
 
-  const payload = await fomoapiRequest(`/token/${address}/holders?${params}`, { requireKey: true });
-  return payload.holders ?? [];
+    const [holders, stats, marketSnapshot] = await Promise.all([
+      fetchTokenHolders(token.address, { limit: 15, networkId: token.networkId }),
+      getTokenStats(token.address, { networkId: token.networkId }),
+      getTrendingTokenByAddress(token.address),
+    ]);
+
+    const holderItems = holders.items ?? [];
+    const enrichedToken = enrichTokenMetadata(token, {
+      marketSnapshot,
+      holderPriceUsd: holderItems[0]?.priceUsd ?? null,
+    });
+
+    return {
+      token: enrichedToken,
+      stats: mapTokenStats(enrichedToken, stats),
+      holders: holderItems.map((row) => mapHolderRow(row, symbol)),
+      holdersShown: holderItems.length,
+      holderTotal: holders.totalHolders ?? stats?.holders ?? null,
+    };
+  }, CACHE_TTL.tokenData);
+}
+
+export async function getTokenThesesCached(symbol, token) {
+  const cacheKey = `fomo:thesis:${symbol}`;
+  return fetchWithCache(cacheKey, async () => {
+    const resolved = token || (await resolveToken(symbol));
+    if (!resolved?.address) {
+      throw new Error("Token not found");
+    }
+
+    const theses = await getTokenTheses(resolved.address, {
+      limit: 15,
+      networkId: resolved.networkId,
+    });
+
+    return theses.map(mapThesisRow);
+  }, CACHE_TTL.thesis);
+}
+
+async function fetchTokenHolders(address, { limit = 20, networkId } = {}) {
+  const cacheKey = `fomo:holders:${address}:${limit}:${networkId ?? "default"}`;
+  return fetchWithCache(cacheKey, async () => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (networkId) {
+      params.set("networkId", String(networkId));
+    }
+
+    const payload = await fomoapiRequest(`/token/${address}/holders?${params}`, { requireKey: true });
+    return {
+      items: payload.holders ?? [],
+      totalHolders: payload.totalHolders ?? payload.count ?? null,
+    };
+  }, CACHE_TTL.tokenData);
+}
+
+export async function getTokenHolders(address, options = {}) {
+  const { items } = await fetchTokenHolders(address, options);
+  return items;
 }
 
 export async function getTokenStats(address, { networkId } = {}) {
-  const params = networkId ? `?networkId=${networkId}` : "";
-  return fomoapiRequest(`/v2/token/${address}/stats${params}`, { requireKey: true });
+  const cacheKey = `fomo:stats:${address}:${networkId ?? "default"}`;
+  return fetchWithCache(cacheKey, async () => {
+    const params = networkId ? `?networkId=${networkId}` : "";
+    return fomoapiRequest(`/v2/token/${address}/stats${params}`, { requireKey: true });
+  }, CACHE_TTL.tokenData);
 }
 
 export async function getTokenTheses(address, { limit = 20, networkId } = {}) {
@@ -154,10 +299,10 @@ export function mapHolderRow(holder, symbol) {
     handle: `@${holder.handle || "unknown"}`,
     avatarUrl: holder.avatar || null,
     position: amount.toLocaleString("en-US", { maximumFractionDigits: 2 }),
-    pnlPct: holder.pnlPct ? formatPercent(holder.pnlPct) : "—",
-    pnlUsd: holder.pnlUsd != null ? formatPnl(holder.pnlUsd) : "—",
-    avgEntry: priceUsd ? formatUsd(priceUsd, { decimals: 3 }) : "—",
-    thesis: holder.thesis || "—",
+    pnlPct: holder.pnlPct ? formatPercent(holder.pnlPct) : "?",
+    pnlUsd: holder.pnlUsd != null ? formatPnl(holder.pnlUsd) : "?",
+    avgEntry: priceUsd ? formatUsd(priceUsd, { decimals: 3 }) : "?",
+    thesis: holder.thesis || "?",
   };
 }
 
@@ -165,29 +310,30 @@ export function mapThesisRow(thesis) {
   return {
     name: thesis.name || thesis.displayName || thesis.handle || "Unknown",
     handle: `@${thesis.handle || "unknown"}`,
-    position: thesis.tradeUsd != null ? formatUsd(thesis.tradeUsd) : "—",
-    pnlPct: thesis.likes != null ? `${thesis.likes} likes` : "—",
-    pnlUsd: thesis.equity != null ? formatUsd(thesis.equity) : "—",
-    avgEntry: "—",
-    thesis: thesis.text || "—",
+    position: thesis.tradeUsd != null ? formatUsd(thesis.tradeUsd) : "?",
+    pnlPct: thesis.likes != null ? `${thesis.likes} likes` : "?",
+    pnlUsd: thesis.equity != null ? formatUsd(thesis.equity) : "?",
+    avgEntry: "?",
+    thesis: thesis.text || "?",
   };
 }
 
 export function mapTokenStats(token, stats) {
   const change24h = token?.change24h ?? stats?.change24h;
   const windows = stats?.windows?.["24h"];
+  const hasLiquidity = token?.liquidityUsd != null;
 
   return {
-    marketCap: token?.marketCapUsd != null ? formatUsd(token.marketCapUsd, { compact: true }) : "—",
-    price: token?.priceUsd != null ? formatUsd(token.priceUsd, { decimals: 3 }) : "—",
-    change: change24h != null ? formatPercent(change24h) : "—",
+    marketCap: token?.marketCapUsd != null ? formatUsd(token.marketCapUsd, { compact: true }) : "?",
+    price: token?.priceUsd != null ? formatUsd(token.priceUsd, { decimals: 3 }) : "?",
+    change: change24h != null ? formatPercent(change24h) : "?",
     changePositive: (change24h ?? 0) >= 0,
     volume: token?.volume24hUsd != null
       ? formatUsd(token.volume24hUsd, { compact: true })
       : windows?.buyVolumeUsd != null
         ? formatUsd(windows.buyVolumeUsd + (windows.sellVolumeUsd || 0), { compact: true })
-        : "—",
-    liquidity: token?.liquidityUsd != null ? formatUsd(token.liquidityUsd, { compact: true }) : "—",
+        : "?",
+    liquidity: hasLiquidity ? formatUsd(token.liquidityUsd, { compact: true }) : null,
     performance: stats?.windows
       ? {
           "5M": formatPercent(stats.windows["5m"]?.priceChangePercent ?? 0),

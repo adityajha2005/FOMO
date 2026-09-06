@@ -135,9 +135,8 @@ def current_coin_history():
 def coins():
     session: Session
     with db.db_session() as session:
-        _current_coin = db.get_current_coin()
-        if _current_coin is not None:
-            _current_coin = session.merge(_current_coin)
+        current = db.get_current_coin()
+        _current_coin = session.merge(current) if current else None
         _coins: List[Coin] = session.query(Coin).all()
         return jsonify([{**coin.info(), "is_current": coin == _current_coin} for coin in _coins])
 

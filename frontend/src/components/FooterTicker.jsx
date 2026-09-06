@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { TICKER_REFRESH_MS } from "../config/polling.js";
+import { LIVE_API_ENABLED } from "../config/api.js";
 import { getMarketTicker } from "../services/binanceApi.js";
+import { binanceSymbolUrl } from "../utils/links.js";
 import { TICKER } from "../data/mockData.js";
 
 export default function FooterTicker() {
@@ -8,6 +10,10 @@ export default function FooterTicker() {
   const [live, setLive] = useState(false);
 
   useEffect(() => {
+    if (!LIVE_API_ENABLED) {
+      return undefined;
+    }
+
     let active = true;
 
     async function loadTicker() {
@@ -37,18 +43,28 @@ export default function FooterTicker() {
     <footer className="footer-ticker">
       <div className="footer-ticker__track">
         {[...items, ...items].map((item, index) => (
-          <div key={`${item.symbol}-${index}`} className="ticker-item">
+          <a
+            key={`${item.symbol}-${index}`}
+            className="ticker-item ticker-item--link"
+            href={binanceSymbolUrl(item.symbol)}
+            target="_blank"
+            rel="noreferrer"
+          >
             <strong>{item.symbol}</strong>
             <span>{item.price}</span>
             <span className={item.up ? "positive" : "negative"}>{item.change}</span>
-          </div>
+          </a>
         ))}
       </div>
       <div className="footer-ticker__meta">
         <span className={`status-dot ${live ? "status-dot--live" : ""}`} />
-        <span>{live ? "Live prices" : "Price feed offline"}</span>
-        <a href="#privacy">Privacy</a>
-        <a href="#terms">Terms</a>
+        <span>{live ? "Market feed" : "Feed offline"}</span>
+        <a href="https://fomo.family/privacy" target="_blank" rel="noreferrer">
+          Privacy
+        </a>
+        <a href="https://fomo.family/terms" target="_blank" rel="noreferrer">
+          Terms
+        </a>
       </div>
     </footer>
   );

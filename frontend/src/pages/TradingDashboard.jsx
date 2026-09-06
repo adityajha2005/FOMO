@@ -1,24 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import FooterTicker from "../components/FooterTicker.jsx";
 import HoldersTable from "../components/HoldersTable.jsx";
 import LeftSidebar from "../components/LeftSidebar.jsx";
 import PriceChart from "../components/PriceChart.jsx";
 import TopNav from "../components/TopNav.jsx";
 import TradePanel from "../components/TradePanel.jsx";
-import { LEADERBOARD_REFRESH_MS, TOKEN_REFRESH_MS } from "../config/polling.js";
+import { LEADERBOARD_REFRESH_MS } from "../config/polling.js";
+import { LIVE_API_ENABLED } from "../config/api.js";
 import { CLANS, HOLDERS, LEADERBOARD } from "../data/mockData.js";
 import { useFomoAlerts } from "../hooks/useFomoAlerts.js";
 import { api } from "../services/api.js";
 import {
   getLeaderboard,
-  getTokenHolders,
-  getTokenStats,
-  getTokenTheses,
-  mapHolderRow,
-  mapThesisRow,
-  mapTokenStats,
-  searchToken,
+  getTokenBundle,
+  getTokenThesesCached,
 } from "../services/fomoApi.js";
+import {
+  copyText,
+  fomoTokenUrl,
+  sharePage,
+  xSearchUrl,
+} from "../utils/links.js";
 
 const DEFAULT_TOKEN = import.meta.env.VITE_DEFAULT_TOKEN || "PONS";
 
@@ -29,6 +31,15 @@ const FALLBACK_TOKEN_STATS = {
   changePositive: true,
   volume: "$145.7M",
   liquidity: "$6.7M",
+  holderCount: 28800,
+  address: "0x39dbed3a2bd333467115de45665cc57f813c4571",
+  performance: {
+    "5M": "+0.8%",
+    "1H": "+2.4%",
+    "4H": "+6.1%",
+    "1D": "+12.98%",
+  },
+  sentiment: { buys: 1204, sells: 566 },
 };
 
 export default function TradingDashboard() {
@@ -40,7 +51,7 @@ export default function TradingDashboard() {
   const [apiOnline, setApiOnline] = useState(false);
   const [clans, setClans] = useState(CLANS);
   const [leaderboard, setLeaderboard] = useState(LEADERBOARD);
-  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(LIVE_API_ENABLED);
   const [leaderboardError, setLeaderboardError] = useState(null);
   const [leaderboardLive, setLeaderboardLive] = useState(false);
   const [liveSource, setLiveSource] = useState(null);
@@ -52,21 +63,29 @@ export default function TradingDashboard() {
   const [tokenLive, setTokenLive] = useState(false);
   const [chartLive, setChartLive] = useState(false);
   const [thesisLoaded, setThesisLoaded] = useState(false);
+  const [tokenError, setTokenError] = useState(null);
+  const [thesisError, setThesisError] = useState(null);
+  const [holdersShown, setHoldersShown] = useState(null);
+  const [allClans, setAllClans] = useState(CLANS);
+  const [actionMessage, setActionMessage] = useState(null);
 
-  const tokenCacheRef = useRef(null);
-
-  const symbol = currentCoin?.symbol || DEFAULT_TOKEN;
+  const fomoSymbol = DEFAULT_TOKEN;
+  const tradeSymbol = currentCoin?.symbol || fomoSymbol;
 
   const { alerts, connected: alertsConnected, delaySeconds: alertsDelaySeconds } = useFomoAlerts({
-    enabled: activeTab === "Alerts",
+    enabled: LIVE_API_ENABLED && (activeTab === "Alerts" || activeTab === "Feed"),
   });
 
   const loadLeaderboard = useCallback(async () => {
+    if (!LIVE_API_ENABLED) {
+      return;
+    }
     try {
-      const { traders, clans: liveClans, source } = await getLeaderboard({ window: "7d", limit: 50 });
+      const { traders, clans: liveClans, source } = await getLeaderboard({ window: "7d", limit: 30 });
 
       setLeaderboard(traders);
       setClans(liveClans.slice(0, 4));
+      setAllClans(liveClans);
       setLeaderboardLive(true);
       setLeaderboardError(null);
       setLiveSource(source);
@@ -78,85 +97,90 @@ export default function TradingDashboard() {
     }
   }, []);
 
-  const resolveToken = useCallback(async () => {
-    if (tokenCacheRef.current?.query === symbol) {
-      return tokenCacheRef.current.token;
-    }
-
-    const token = await searchToken(symbol);
-    if (!token?.address) {
-      throw new Error("Token not found");
-    }
-
-    tokenCacheRef.current = { query: symbol, token };
-    return token;
-  }, [symbol]);
-
   const loadTokenData = useCallback(async () => {
+    if (!LIVE_API_ENABLED) {
+      return;
+    }
+
     setTokenLoading(true);
+    setTokenError(null);
 
     try {
-      const token = await resolveToken();
-
-      const [holders, stats] = await Promise.all([
-        getTokenHolders(token.address, { limit: 20, networkId: token.networkId }),
-        getTokenStats(token.address, { networkId: token.networkId }),
-      ]);
-
-      setTokenStats(mapTokenStats(token, stats));
-      setHolderRows(holders.map((row) => mapHolderRow(row, symbol)));
+      const { stats, holders, holdersShown: shown, holderTotal } = await getTokenBundle(fomoSymbol);
+      setTokenStats(stats);
+      setHolderRows(holders);
+      setHoldersShown(shown ?? holders.length);
+      if (holderTotal != null) {
+        setTokenStats((current) => ({ ...current, holderCount: holderTotal }));
+      }
       setTokenLive(true);
       setChartLive(true);
-    } catch {
+    } catch (error) {
       setTokenLive(false);
       setTokenStats(FALLBACK_TOKEN_STATS);
       setHolderRows(HOLDERS);
+      setTokenError(error.message || "Could not load token data");
     } finally {
       setTokenLoading(false);
     }
-  }, [resolveToken, symbol]);
+  }, [fomoSymbol]);
 
   const loadThesisData = useCallback(async () => {
-    if (thesisLoaded) {
+    if (!LIVE_API_ENABLED) {
+      return;
+    }
+
+    if (thesisLoaded || thesisLoading) {
       return;
     }
 
     setThesisLoading(true);
+    setThesisError(null);
 
     try {
-      const token = await resolveToken();
-      const theses = await getTokenTheses(token.address, { limit: 20, networkId: token.networkId });
-      setThesisRows(theses.map(mapThesisRow));
+      const rows = await getTokenThesesCached(fomoSymbol);
+      setThesisRows(rows);
       setThesisLoaded(true);
-    } catch {
+    } catch (error) {
       setThesisRows([]);
+      setThesisError(error.message || "Could not load thesis data");
     } finally {
       setThesisLoading(false);
     }
-  }, [resolveToken, thesisLoaded]);
+  }, [fomoSymbol, thesisLoaded, thesisLoading]);
 
   useEffect(() => {
+    if (!LIVE_API_ENABLED) {
+      setLeaderboardLoading(false);
+      setHoldersShown(HOLDERS.length);
+      return undefined;
+    }
+
     loadLeaderboard();
+    if (!LEADERBOARD_REFRESH_MS) {
+      return undefined;
+    }
+
     const intervalId = window.setInterval(loadLeaderboard, LEADERBOARD_REFRESH_MS);
     return () => window.clearInterval(intervalId);
   }, [loadLeaderboard]);
 
   useEffect(() => {
-    tokenCacheRef.current = null;
+    if (!LIVE_API_ENABLED) {
+      return undefined;
+    }
+
     setThesisLoaded(false);
     setThesisRows([]);
+    setThesisError(null);
     loadTokenData();
-    const intervalId = window.setInterval(loadTokenData, TOKEN_REFRESH_MS);
-    return () => window.clearInterval(intervalId);
-  }, [loadTokenData, symbol]);
+  }, [loadTokenData, fomoSymbol]);
 
   useEffect(() => {
-    if (holdersTab === "thesis") {
-      loadThesisData();
+    if (!LIVE_API_ENABLED) {
+      return undefined;
     }
-  }, [holdersTab, loadThesisData]);
 
-  useEffect(() => {
     let active = true;
 
     async function loadBotData() {
@@ -193,8 +217,28 @@ export default function TradingDashboard() {
   const tableRows = holdersTab === "thesis" ? thesisRows : holderRows;
   const tableLoading = holdersTab === "thesis" ? thesisLoading : tokenLoading;
 
+  const showActionMessage = useCallback((message) => {
+    setActionMessage(message);
+    window.setTimeout(() => setActionMessage(null), 2200);
+  }, []);
+
+  async function handleCopyAddress() {
+    const copied = await copyText(tokenStats.address);
+    showActionMessage(copied ? "Contract address copied." : "Could not copy address.");
+  }
+
+  async function handleShareToken() {
+    const shared = await sharePage({
+      title: `${fomoSymbol} on fomo`,
+      text: `Check out ${fomoSymbol} on fomo.family`,
+      url: fomoTokenUrl(fomoSymbol),
+    });
+    showActionMessage(shared ? "Share link copied." : "Share cancelled.");
+  }
+
   return (
     <div className="dashboard-shell">
+      {actionMessage ? <div className="toast-banner">{actionMessage}</div> : null}
       <TopNav portfolioUsd={portfolioUsd} cashUsd={portfolioUsd * 0.18} />
 
       <div className="dashboard-body">
@@ -202,6 +246,7 @@ export default function TradingDashboard() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           clans={clans}
+          allClans={allClans}
           leaderboard={leaderboard}
           alerts={alerts}
           alertsConnected={alertsConnected}
@@ -214,46 +259,81 @@ export default function TradingDashboard() {
         <main className="main-panel">
           <section className="token-header">
             <div className="token-header__left">
-              <div className="token-icon">{symbol.slice(0, 1)}</div>
+              {tokenStats.imageUrl ? (
+                <img className="token-icon token-icon--image" src={tokenStats.imageUrl} alt="" />
+              ) : (
+                <div className="token-icon">{fomoSymbol.slice(0, 1)}</div>
+              )}
               <div>
                 <div className="token-header__title">
-                  <h1>{symbol}</h1>
+                  <h1>{fomoSymbol}</h1>
                   <span className="token-tag">Spot</span>
-                  {!apiOnline ? <span className="token-tag muted">Bot offline</span> : null}
-                  {leaderboardLive ? <span className="token-tag live">Live traders</span> : null}
-                  {tokenLive ? <span className="token-tag live">Live token</span> : null}
-                  {alertsConnected ? <span className="token-tag live">Live feed</span> : null}
+                  {LIVE_API_ENABLED && tokenLive ? (
+                    <span className="status-chip status-chip--live">Market data live</span>
+                  ) : (
+                    <span className="status-chip">UI preview</span>
+                  )}
+                </div>
+                <div className="token-header__meta">
+                  {tradeSymbol !== fomoSymbol ? (
+                    <span className="token-meta-item">Bot pair: {tradeSymbol}/USDT</span>
+                  ) : null}
+                  {!apiOnline ? <span className="token-meta-item token-meta-item--warn">Bot offline</span> : null}
+                  {tokenStats.address ? (
+                    <span className="token-meta-item num">{tokenStats.address.slice(0, 6)}...{tokenStats.address.slice(-4)}</span>
+                  ) : null}
                 </div>
                 <div className="token-header__links">
-                  <button type="button">Copy</button>
-                  <button type="button">Share</button>
-                  <button type="button">Website</button>
-                  <button type="button">Search</button>
+                  <button type="button" onClick={handleCopyAddress} disabled={!tokenStats.address}>
+                    Copy contract
+                  </button>
+                  <button type="button" onClick={handleShareToken}>
+                    Share
+                  </button>
+                  <a href={fomoTokenUrl(fomoSymbol)} target="_blank" rel="noreferrer">
+                    Token page
+                  </a>
+                  <a href={xSearchUrl(fomoSymbol)} target="_blank" rel="noreferrer">
+                    Research
+                  </a>
                 </div>
               </div>
             </div>
 
             <div className="token-stats">
               <Stat label="Market Cap" value={tokenStats.marketCap} />
-              <Stat label="Price" value={tokenStats.price} />
+              <Stat label="Last Price" value={tokenStats.price} />
               <Stat label="24H Change" value={tokenStats.change} positive={tokenStats.changePositive} />
               <Stat label="24H Volume" value={tokenStats.volume} />
-              <Stat label="Liquidity" value={tokenStats.liquidity} />
+              {tokenStats.liquidity ? <Stat label="Liquidity" value={tokenStats.liquidity} /> : null}
             </div>
           </section>
 
-          <PriceChart symbol={symbol} live={chartLive || leaderboardLive} />
+          <PriceChart symbol={tradeSymbol} live={LIVE_API_ENABLED && (chartLive || leaderboardLive)} />
           <HoldersTable
             rows={tableRows}
-            symbol={symbol}
+            symbol={fomoSymbol}
             activeTab={holdersTab}
             onTabChange={setHoldersTab}
             holderCount={tokenStats.holderCount}
+            holdersShown={holdersShown}
             loading={tableLoading}
+            tokenLive={tokenLive}
+            tokenError={tokenError}
+            thesisLoaded={thesisLoaded}
+            thesisError={thesisError}
+            onLoadThesis={loadThesisData}
           />
         </main>
 
-        <TradePanel symbol={symbol} side={tradeSide} onSideChange={setTradeSide} tokenStats={tokenStats} />
+        <TradePanel
+          symbol={tradeSymbol}
+          fomoSymbol={fomoSymbol}
+          side={tradeSide}
+          onSideChange={setTradeSide}
+          tokenStats={tokenStats}
+          botOnline={apiOnline}
+        />
       </div>
 
       <FooterTicker />
@@ -265,7 +345,7 @@ function Stat({ label, value, positive = false }) {
   return (
     <div className="token-stat">
       <span>{label}</span>
-      <strong className={positive ? "positive" : undefined}>{value}</strong>
+      <strong className={`num ${positive ? "positive" : ""}`}>{value}</strong>
     </div>
   );
 }
