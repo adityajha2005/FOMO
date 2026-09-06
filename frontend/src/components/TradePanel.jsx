@@ -1,4 +1,23 @@
-export default function TradePanel({ symbol = "PONS", side, onSideChange }) {
+export default function TradePanel({
+  symbol = "PONS",
+  side,
+  onSideChange,
+  tokenStats = null,
+  aboutText = null,
+}) {
+  const performance = tokenStats?.performance || {
+    "5M": "+0.8%",
+    "1H": "+2.4%",
+    "4H": "+6.1%",
+    "1D": tokenStats?.change || "+12.98%",
+  };
+
+  const buys = tokenStats?.sentiment?.buys ?? 1204;
+  const sells = tokenStats?.sentiment?.sells ?? 566;
+  const total = buys + sells || 1;
+  const buyPct = Math.round((buys / total) * 100);
+  const sellPct = 100 - buyPct;
+
   return (
     <aside className="trade-panel">
       <div className="trade-toggle">
@@ -39,20 +58,15 @@ export default function TradePanel({ symbol = "PONS", side, onSideChange }) {
       <section className="about-panel">
         <h4>About</h4>
         <p>
-          Automated bridge rotation bot tracking supported altcoins and swapping into stronger
-          momentum when ratio thresholds are met.
+          {aboutText ||
+            "Automated bridge rotation bot tracking supported altcoins and swapping into stronger momentum when ratio thresholds are met."}
         </p>
 
         <div className="perf-grid">
-          {[
-            ["5M", "+0.8%"],
-            ["1H", "+2.4%"],
-            ["4H", "+6.1%"],
-            ["1D", "+12.98%"],
-          ].map(([label, value]) => (
+          {Object.entries(performance).map(([label, value]) => (
             <div key={label} className="perf-grid__item">
               <span>{label}</span>
-              <strong className="positive">{value}</strong>
+              <strong className={String(value).startsWith("+") ? "positive" : "negative"}>{value}</strong>
             </div>
           ))}
         </div>
@@ -60,17 +74,17 @@ export default function TradePanel({ symbol = "PONS", side, onSideChange }) {
         <div className="sentiment-block">
           <div className="sentiment-row">
             <span>Buys</span>
-            <strong>1,204</strong>
+            <strong>{buys.toLocaleString()}</strong>
           </div>
           <div className="progress-bar">
-            <div className="progress-bar__buy" style={{ width: "68%" }} />
+            <div className="progress-bar__buy" style={{ width: `${buyPct}%` }} />
           </div>
           <div className="sentiment-row">
             <span>Sells</span>
-            <strong>566</strong>
+            <strong>{sells.toLocaleString()}</strong>
           </div>
           <div className="progress-bar">
-            <div className="progress-bar__sell" style={{ width: "32%" }} />
+            <div className="progress-bar__sell" style={{ width: `${sellPct}%` }} />
           </div>
         </div>
 

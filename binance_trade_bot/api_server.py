@@ -1,4 +1,8 @@
 import re
+import json
+import os
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta
 from itertools import groupby
 from typing import List, Tuple
@@ -142,6 +146,72 @@ def pairs():
     with db.db_session() as session:
         all_pairs: List[Pair] = session.query(Pair).all()
         return jsonify([pair.info() for pair in all_pairs])
+
+
+@app.route("/api/fomo/leaderboard")
+def fomo_leaderboard():
+    token = os.environ.get("FOMO_TOKEN")
+
+    if not token:
+        return jsonify({"success": False, "message": "FOMO_TOKEN is not configured"}), 500
+
+    window = request.args.get("window", "7d")
+    limit = request.args.get("limit", "50")
+    url = (
+        "https://prod-api.fomo.family/v2/clans/leaderboard"
+        f"?window={window}&limit={limit}"
+    )
+
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "app-language": "en",
+            "x-supported-chains": "1,56,143,4663,8453,1399811149",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            return jsonify(payload)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        logger.error(f"FOMO leaderboard HTTP error: {exc.code} {body}")
+        return jsonify({"success": False, "message": "FOMO leaderboard request failed"}), exc.code
+    except urllib.error.URLError as exc:
+        logger.error(f"FOMO leaderboard network error: {exc.reason}")
+        return jsonify({"success": False, "message": "Could not reach FOMO API"}), 502
+
+
+@app.route("/api/fomoapi/<path:subpath>", methods=["GET"])
+def fomoapi_proxy(subpath):
+    api_key = os.environ.get("FOMO_API_KEY")
+    query = request.query_string.decode("utf-8")
+    url = f"https://api.fomoapi.io/{subpath}"
+    if query:
+        url = f"{url}?{query}"
+
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    req = urllib.request.Request(url, headers=headers)
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            return jsonify(payload)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        logger.error(f"FOMO API HTTP error: {exc.code} {body}")
+        try:
+            return jsonify(json.loads(body)), exc.code
+        except json.JSONDecodeError:
+            return jsonify({"error": "FOMO API request failed"}), exc.code
+    except urllib.error.URLError as exc:
+        logger.error(f"FOMO API network error: {exc.reason}")
+        return jsonify({"error": "Could not reach FOMO API"}), 502
 
 
 @socketio.on("update", namespace="/backend")

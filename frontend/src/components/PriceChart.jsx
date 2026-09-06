@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { CandlestickSeries, createChart, CrosshairMode } from "lightweight-charts";
+import { getKlines } from "../services/binanceApi.js";
 
 function generateCandles(count = 120) {
   const candles = [];
@@ -13,14 +14,7 @@ function generateCandles(count = 120) {
     const high = Math.max(open, close) * (1 + Math.random() * 0.008);
     const low = Math.min(open, close) * (1 - Math.random() * 0.008);
 
-    candles.push({
-      time,
-      open,
-      high,
-      low,
-      close,
-    });
-
+    candles.push({ time, open, high, low, close });
     price = close;
     time += 3600;
   }
@@ -28,8 +22,10 @@ function generateCandles(count = 120) {
   return candles;
 }
 
-export default function PriceChart({ symbol = "PONS" }) {
+export default function PriceChart({ symbol = "PONS", live = false }) {
   const containerRef = useRef(null);
+  const seriesRef = useRef(null);
+  const chartRef = useRef(null);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -68,6 +64,8 @@ export default function PriceChart({ symbol = "PONS" }) {
       wickDownColor: "#ef4444",
     });
 
+    chartRef.current = chart;
+    seriesRef.current = series;
     series.setData(generateCandles());
 
     const resizeObserver = new ResizeObserver((entries) => {
@@ -82,6 +80,41 @@ export default function PriceChart({ symbol = "PONS" }) {
     return () => {
       resizeObserver.disconnect();
       chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadCandles() {
+      if (!seriesRef.current) {
+        return;
+      }
+
+      try {
+        const binanceSymbol = ["BTC", "ETH", "SOL", "BNB"].includes(symbol)
+          ? `${symbol}USDT`
+          : "BTCUSDT";
+        const candles = await getKlines(binanceSymbol, "1h", 120);
+
+        if (active && candles.length > 0) {
+          seriesRef.current.setData(candles);
+        }
+      } catch {
+        if (active && seriesRef.current) {
+          seriesRef.current.setData(generateCandles());
+        }
+      }
+    }
+
+    loadCandles();
+    const intervalId = window.setInterval(loadCandles, 60_000);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
     };
   }, [symbol]);
 
@@ -96,7 +129,7 @@ export default function PriceChart({ symbol = "PONS" }) {
           ))}
         </div>
         <div className="chart-toolbar__right">
-          <button type="button" className="pill">Indicators</button>
+          <button type="button" className="pill">{live ? "Live chart" : "Demo chart"}</button>
           <button type="button" className="pill">USD / {symbol}</button>
         </div>
       </div>
