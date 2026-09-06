@@ -133,10 +133,42 @@ const TICKER = [
 ];
 
 const TRENDING_TOKENS = [
-  { symbol: "PONS", name: "Pons", price: "$0.922", change: "+1.98%", changePositive: true },
-  { symbol: "BTC", name: "Bitcoin", price: "$80,024", change: "+2.31%", changePositive: true },
-  { symbol: "ETH", name: "Ethereum", price: "$2,503", change: "+5.43%", changePositive: true },
-  { symbol: "SOL", name: "Solana", price: "$106.58", change: "+4.10%", changePositive: true },
+  {
+    symbol: "PONS",
+    name: "Pons",
+    price: "$0.922",
+    change: "+1.98%",
+    changePositive: true,
+    marketCap: "$826.5M MC",
+    imageUrl: null,
+  },
+  {
+    symbol: "PORT",
+    name: "Port",
+    price: "$0.000622",
+    change: "+12579.77%",
+    changePositive: true,
+    marketCap: "$621.8K MC",
+    imageUrl: null,
+  },
+  {
+    symbol: "AI",
+    name: "AI",
+    price: "$0.189",
+    change: "-33.94%",
+    changePositive: false,
+    marketCap: "$189.2M MC",
+    imageUrl: null,
+  },
+  {
+    symbol: "SOL",
+    name: "Solana",
+    price: "$106.58",
+    change: "+4.10%",
+    changePositive: true,
+    marketCap: "$58.2B MC",
+    imageUrl: null,
+  },
 ];
 
 export { CLANS, HOLDERS, LEADERBOARD, TICKER, TRENDING_TOKENS };

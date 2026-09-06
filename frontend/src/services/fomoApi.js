@@ -1,7 +1,13 @@
 import { CACHE_TTL, KNOWN_TOKENS, LEADERBOARD_CACHE_MS, LEADERBOARD_REFRESH_MS } from "../config/polling.js";
 import { LIVE_API_ENABLED } from "../config/api.js";
 import { clearCache, fetchWithCache } from "../utils/fomoCache.js";
-import { formatLeaderboardPnl, formatPnl, formatUsd, formatPercent } from "../utils/format.js";
+import {
+  formatLeaderboardPnl,
+  formatPnl,
+  formatTokenPrice,
+  formatUsd,
+  formatPercent,
+} from "../utils/format.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -22,7 +28,9 @@ async function fomoapiRequest(path, { requireKey = false } = {}) {
   if (!response.ok) {
     const message = payload?.message || payload?.error || `Request failed: ${response.status}`;
     if (response.status === 401 && requireKey) {
-      throw new Error("Add FOMO_API_KEY to frontend/.env for token holders, stats, and realtime data.");
+      throw new Error(
+        "Add FOMO_API_KEY to frontend/.env (local) or Vercel env vars (production) for token boards, holders, and stats.",
+      );
     }
     throw new Error(message);
   }
@@ -239,12 +247,32 @@ export async function getAlerts({ limit = 30 } = {}) {
   }, CACHE_TTL.default);
 }
 
-async function loadTrendingTokens() {
-  const cacheKey = "fomo:trending-tokens:50";
+const TOKEN_BOARDS = {
+  trending: "trending",
+  "most-held": "most-held",
+  graduated: "graduated",
+};
+
+async function loadTokenBoard(board = "trending", limit = 50) {
+  const boardId = TOKEN_BOARDS[board] ? board : "trending";
+  const cacheKey = `fomo:token-board:v1:${boardId}:${limit}`;
+
   return fetchWithCache(cacheKey, async () => {
-    const payload = await fomoapiRequest("/v2/leaderboard/tokens/trending?limit=50", { requireKey: true });
+    const payload = await fomoapiRequest(
+      `/v2/leaderboard/tokens/${boardId}?limit=${limit}`,
+      { requireKey: true },
+    );
+
+    if (payload.available === false) {
+      return [];
+    }
+
     return payload.tokens ?? [];
   }, CACHE_TTL.leaderboard);
+}
+
+async function loadTrendingTokens() {
+  return loadTokenBoard("trending", 50);
 }
 
 async function getTrendingTokenByAddress(address) {
@@ -259,6 +287,10 @@ async function getTrendingTokenByAddress(address) {
 
 export async function getTrendingTokens() {
   return loadTrendingTokens();
+}
+
+export async function getTokenBoard(board = "trending", { limit = 50 } = {}) {
+  return loadTokenBoard(board, limit);
 }
 
 export async function searchUnified(query, { limit = 8 } = {}) {
@@ -278,10 +310,12 @@ export function mapTrendingToken(entry) {
     symbol: token.symbol || "???",
     name: token.name || token.symbol || "Unknown",
     address: token.address || null,
-    price: entry.priceUsd != null ? formatUsd(entry.priceUsd, { decimals: 3 }) : "?",
+    imageUrl: entry.image || token.image || token.imageUrl || null,
+    price: entry.priceUsd != null ? formatTokenPrice(entry.priceUsd) : "?",
     change: formatPercent(change24h),
     changePositive: change24h >= 0,
-    marketCap: entry.marketCapUsd != null ? formatUsd(entry.marketCapUsd, { compact: true }) : "?",
+    marketCap:
+      entry.marketCapUsd != null ? `${formatUsd(entry.marketCapUsd, { compact: true })} MC` : "?",
     holders: entry.holders ?? null,
     rank: entry.rank ?? null,
   };

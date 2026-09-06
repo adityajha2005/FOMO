@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatAlertTime } from "../utils/format.js";
 import { fomoTraderUrl, openExternal } from "../utils/links.js";
-import { getTrendingTokens, mapTrendingToken } from "../services/fomoApi.js";
+import { getTokenBoard, mapTrendingToken } from "../services/fomoApi.js";
 import { TRENDING_TOKENS } from "../data/mockData.js";
 import { LIVE_API_ENABLED } from "../config/api.js";
 
@@ -11,6 +11,32 @@ const WINDOWS = [
   { id: "30d", label: "30D" },
   { id: "all", label: "ALL" },
 ];
+
+const TOKEN_FILTERS = [
+  { id: "trending", label: "Trending" },
+  { id: "most-held", label: "Most held" },
+  { id: "graduated", label: "Graduated" },
+];
+
+function TokenLogo({ url, symbol }) {
+  const [failed, setFailed] = useState(false);
+
+  if (url && !failed) {
+    return (
+      <div className="token-list-row__logo">
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+        />
+      </div>
+    );
+  }
+
+  return <div className="token-list-row__logo token-list-row__logo--fallback">{symbol?.slice(0, 1) || "?"}</div>;
+}
 
 function Avatar({ url, initials, className = "avatar avatar--sm" }) {
   const [failed, setFailed] = useState(false);
@@ -52,6 +78,8 @@ export default function LeftSidebar({
 }) {
   const [trendingTokens, setTrendingTokens] = useState([]);
   const [tokensLoading, setTokensLoading] = useState(false);
+  const [tokenBoard, setTokenBoard] = useState("trending");
+  const [tokensError, setTokensError] = useState(null);
 
   const displayClans = (allClans.length > 0 ? allClans : clans).slice(0, 6);
 
@@ -63,21 +91,24 @@ export default function LeftSidebar({
     if (!LIVE_API_ENABLED) {
       setTrendingTokens(TRENDING_TOKENS);
       setTokensLoading(false);
+      setTokensError(null);
       return undefined;
     }
 
     let active = true;
     setTokensLoading(true);
+    setTokensError(null);
 
-    getTrendingTokens()
+    getTokenBoard(tokenBoard, { limit: 50 })
       .then((tokens) => {
         if (active) {
           setTrendingTokens(tokens.map(mapTrendingToken));
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (active) {
           setTrendingTokens([]);
+          setTokensError(error.message || "Could not load tokens");
         }
       })
       .finally(() => {
@@ -89,7 +120,7 @@ export default function LeftSidebar({
     return () => {
       active = false;
     };
-  }, [activeTab]);
+  }, [activeTab, tokenBoard]);
 
   function openTrader(handle) {
     openExternal(fomoTraderUrl(handle));
@@ -147,28 +178,48 @@ export default function LeftSidebar({
 
         {activeTab === "Tokens" ? (
           <section className="sidebar-section">
-            <div className="sidebar-section__header">
-              <h3>Trending</h3>
+            <div className="window-filters token-board-filters">
+              {TOKEN_FILTERS.map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  className={tokenBoard === filter.id ? "window-filters__btn active" : "window-filters__btn"}
+                  onClick={() => setTokenBoard(filter.id)}
+                >
+                  {filter.label}
+                </button>
+              ))}
             </div>
-            {tokensLoading ? <p className="sidebar-status">Loading...</p> : null}
-            {trendingTokens.map((token) => (
-              <a
-                key={token.address || token.symbol}
-                className="token-list-row"
-                href={`https://fomo.family/token/${encodeURIComponent(token.symbol)}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <div>
-                  <strong>{token.symbol}</strong>
-                  <div className="subtle">{token.name}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div className="num">{token.price}</div>
-                  <div className={`num ${token.changePositive ? "positive" : "negative"}`}>{token.change}</div>
-                </div>
-              </a>
-            ))}
+
+            {tokensLoading ? <p className="sidebar-status">Loading tokens...</p> : null}
+            {tokensError ? (
+              <p className="sidebar-status sidebar-status--error">{tokensError}</p>
+            ) : null}
+            {!tokensLoading && !tokensError && trendingTokens.length === 0 ? (
+              <p className="sidebar-status">No tokens on this board yet.</p>
+            ) : null}
+
+            <div className="token-list">
+              {trendingTokens.map((token) => (
+                <a
+                  key={token.address || token.symbol}
+                  className="token-list-row"
+                  href={`https://fomo.family/token/${encodeURIComponent(token.symbol)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <TokenLogo url={token.imageUrl} symbol={token.symbol} />
+                  <div className="token-list-row__main">
+                    <strong>{token.symbol}</strong>
+                    <div className="subtle num">{token.price}</div>
+                  </div>
+                  <div className="token-list-row__stats">
+                    <div className="num">{token.marketCap}</div>
+                    <div className={`num ${token.changePositive ? "positive" : "negative"}`}>{token.change}</div>
+                  </div>
+                </a>
+              ))}
+            </div>
           </section>
         ) : null}
 

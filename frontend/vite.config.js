@@ -41,12 +41,13 @@ export default defineConfig(({ mode }) => {
           configure: (proxy) => {
             proxy.on("proxyReq", (proxyReq) => {
               const upstreamPath = proxyReq.path.replace(/^\/api\/fomoapi\/?/, "");
+              const normalized = upstreamPath.replace(/^\//, "");
               const keyless =
-                upstreamPath.startsWith("/v2/leaderboard/") ||
-                upstreamPath.startsWith("/v2/alerts") ||
-                upstreamPath === "/v1" ||
-                upstreamPath.startsWith("/v1/") ||
-                upstreamPath === "/health";
+                /^v2\/leaderboard\/(24h|7d|30d|all)(\?|$)/.test(normalized) ||
+                normalized.startsWith("v2/alerts") ||
+                normalized === "v1" ||
+                normalized.startsWith("v1/") ||
+                normalized === "health";
 
               if (env.FOMO_API_KEY && !keyless) {
                 proxyReq.setHeader("Authorization", `Bearer ${env.FOMO_API_KEY}`);

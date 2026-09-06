@@ -57,6 +57,24 @@ export function formatUsd(value, { compact = false, decimals = 2 } = {}) {
   return `$${amount.toFixed(Math.max(decimals, 4))}`;
 }
 
+export function formatTokenPrice(value) {
+  const amount = Number(value) || 0;
+
+  if (amount >= 1) {
+    return formatUsd(amount, { decimals: 3 });
+  }
+
+  if (amount >= 0.01) {
+    return formatUsd(amount, { decimals: 4 });
+  }
+
+  if (amount >= 0.0001) {
+    return `$${amount.toFixed(6)}`;
+  }
+
+  return `$${amount.toFixed(8)}`;
+}
+
 export function formatPercent(value) {
   const amount = Number(value) || 0;
   const sign = amount >= 0 ? "+" : "";

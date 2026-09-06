@@ -1,10 +1,16 @@
 function isKeylessFomoPath(path) {
+  const normalized = path.replace(/^\//, "");
+
+  // Trader PnL boards are free; token boards (trending, most-held, etc.) need FOMO_API_KEY.
+  if (/^v2\/leaderboard\/(24h|7d|30d|all)(\?|$)/.test(normalized)) {
+    return true;
+  }
+
   return (
-    path.startsWith("v2/leaderboard/") ||
-    path.startsWith("v2/alerts") ||
-    path === "v1" ||
-    path.startsWith("v1/") ||
-    path === "health"
+    normalized.startsWith("v2/alerts") ||
+    normalized === "v1" ||
+    normalized.startsWith("v1/") ||
+    normalized === "health"
   );
 }
 
