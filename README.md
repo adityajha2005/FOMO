@@ -210,6 +210,8 @@ without limitation, any direct or indirect damages for loss of profits.
 
 ## Terminal copy-trading CLI (`fomo_cli`)
 
+Full reference with every formula: [docs/fomo_cli.md](docs/fomo_cli.md).
+
 Follows the FOMO.family leaderboard (top 30 overall + top 3 daily / 5 weekly / 10 monthly), classifies each
 trader (Trencher / Flipper / Holder, risk, conviction, thesis hit-rate) and copies buys only when tape,
 confluence or a reliable thesis backs them. Paper mode by default; live Solana swaps via Jupiter with `--live`.
