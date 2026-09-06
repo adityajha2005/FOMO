@@ -13,3 +13,6 @@ crypto_trading.db
 apprise.yml
 .DS_Store
 .bot/
+frontend/node_modules/
+frontend/dist/
+frontend/.env
