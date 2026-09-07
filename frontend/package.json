@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "python ../binance_trade_bot/api_server.py",
     "build": "vite build",
     "preview": "vite preview"
   },

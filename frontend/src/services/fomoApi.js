@@ -27,9 +27,11 @@ async function fomoapiRequest(path, { requireKey = false } = {}) {
 
   if (!response.ok) {
     const message = payload?.message || payload?.error || `Request failed: ${response.status}`;
-    if (response.status === 401 && requireKey) {
+    if (response.status === 401) {
       throw new Error(
-        "Add FOMO_API_KEY to frontend/.env (local) or Vercel env vars (production) for token boards, holders, and stats.",
+        requireKey
+          ? "Add FOMO_API_KEY to frontend/.env (local) or Vercel env vars (production) for token boards, holders, and stats."
+          : "Add FOMO_API_KEY to frontend/.env (local) or Vercel env vars (production). Free keys at https://fomoapi.io/dashboard",
       );
     }
     throw new Error(message);
@@ -66,18 +68,25 @@ function mapBookEntry(trader, index) {
   const name = trader.displayName || handle;
   const pnlRaw = Number(trader.pnlUsd) || 0;
   const wallet = trader.wallets?.solana || trader.wallets?.evm || null;
+  const token = trader.topToken || trader.token || trader.primaryToken || null;
+  const contract = token?.address || wallet;
+  const tickerSymbol = token?.symbol || handle.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
 
   return {
     id: handle,
     rank: trader.rank ?? index + 1,
     name,
     handle,
-    ticker: `$${handle.replace(/[^a-zA-Z0-9]/g, "").toUpperCase()}`,
+    ticker: `$${tickerSymbol}`,
     pnlRaw,
     volumeRaw: Number(trader.volumeUsd) || 0,
     trades: Number(trader.trades) || 0,
     followers: Number(trader.followers) || 0,
     holdings: Number(trader.holdings) || 0,
+    feesEth: trader.feesEth ?? trader.fees?.eth ?? null,
+    mcapEth: trader.mcapEth ?? trader.marketCapEth ?? token?.marketCapEth ?? null,
+    contract,
+    graduated: Boolean(trader.graduated || token?.graduated),
     avatarUrl: trader.avatar || null,
     initials: name.slice(0, 1).toUpperCase(),
     clan: trader.clan?.name || null,
@@ -87,8 +96,8 @@ function mapBookEntry(trader, index) {
   };
 }
 
-export async function getBookTraders({ window = "24h", limit = 100 } = {}) {
-  const cacheKey = `fomo:book:v1:${window}:${limit}`;
+export async function getBookTraders({ window = "24h", limit = 122 } = {}) {
+  const cacheKey = `fomo:book:v2:${window}:${limit}`;
   return fetchWithCache(cacheKey, async () => {
     const params = new URLSearchParams({ limit: String(limit) });
     const payload = await fomoapiRequest(`/v2/leaderboard/${window}?${params}`);

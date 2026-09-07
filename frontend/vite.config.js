@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { copyTraderDevMiddleware } from "./copyTraderDevMiddleware.js";
 import { getFomoBearer, invalidateFomoBearer } from "./fomoAuth.js";
 
 export default defineConfig(({ mode }) => {
@@ -14,6 +15,12 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
+      {
+        name: "copy-trader-dev-fallback",
+        configureServer(server) {
+          server.middlewares.use(copyTraderDevMiddleware());
+        },
+      },
       {
         name: "fomo-auth",
         configureServer() {
@@ -40,16 +47,7 @@ export default defineConfig(({ mode }) => {
           rewrite: (path) => path.replace(/^\/api\/fomoapi/, ""),
           configure: (proxy) => {
             proxy.on("proxyReq", (proxyReq) => {
-              const upstreamPath = proxyReq.path.replace(/^\/api\/fomoapi\/?/, "");
-              const normalized = upstreamPath.replace(/^\//, "");
-              const keyless =
-                /^v2\/leaderboard\/(24h|7d|30d|all)(\?|$)/.test(normalized) ||
-                normalized.startsWith("v2/alerts") ||
-                normalized === "v1" ||
-                normalized.startsWith("v1/") ||
-                normalized === "health";
-
-              if (env.FOMO_API_KEY && !keyless) {
+              if (env.FOMO_API_KEY) {
                 proxyReq.setHeader("Authorization", `Bearer ${env.FOMO_API_KEY}`);
               }
             });

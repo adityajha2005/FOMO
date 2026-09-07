@@ -12,12 +12,15 @@ const EMPTY = {
   events: [],
 };
 
+const OFFLINE_REFRESH_MS = 30000;
+
 export function useCopyTrader({ enabled = LIVE_API_ENABLED, refreshKey = 0 } = {}) {
   const [data, setData] = useState(EMPTY);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState(null);
   const [connected, setConnected] = useState(false);
   const activeRef = useRef(true);
+  const refreshMsRef = useRef(COPY_TRADER_REFRESH_MS);
 
   const refresh = useCallback(async () => {
     if (!enabled) {
@@ -30,14 +33,16 @@ export function useCopyTrader({ enabled = LIVE_API_ENABLED, refreshKey = 0 } = {
         return;
       }
       setData(snapshot);
-      setConnected(true);
+      setConnected(!snapshot.dev_stub);
       setError(null);
+      refreshMsRef.current = COPY_TRADER_REFRESH_MS;
     } catch (err) {
       if (!activeRef.current) {
         return;
       }
       setConnected(false);
       setError(err.message || "Could not load copy-trader data");
+      refreshMsRef.current = OFFLINE_REFRESH_MS;
     } finally {
       if (activeRef.current) {
         setLoading(false);
@@ -47,6 +52,7 @@ export function useCopyTrader({ enabled = LIVE_API_ENABLED, refreshKey = 0 } = {
 
   useEffect(() => {
     activeRef.current = true;
+    refreshMsRef.current = COPY_TRADER_REFRESH_MS;
 
     if (!enabled) {
       setLoading(false);
@@ -54,10 +60,20 @@ export function useCopyTrader({ enabled = LIVE_API_ENABLED, refreshKey = 0 } = {
     }
 
     refresh();
-    const intervalId = window.setInterval(refresh, COPY_TRADER_REFRESH_MS);
+    let intervalId = 0;
+
+    function scheduleNext(delay = refreshMsRef.current) {
+      intervalId = window.setTimeout(async () => {
+        await refresh();
+        scheduleNext(refreshMsRef.current);
+      }, delay);
+    }
+
+    scheduleNext(COPY_TRADER_REFRESH_MS);
+
     return () => {
       activeRef.current = false;
-      window.clearInterval(intervalId);
+      window.clearTimeout(intervalId);
     };
   }, [enabled, refresh, refreshKey]);
 

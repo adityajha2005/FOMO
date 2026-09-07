@@ -8,6 +8,7 @@ import {
   openExternal,
 } from "../utils/links.js";
 import { searchUnified } from "../services/fomoApi.js";
+import BrandLogo from "./BrandLogo.jsx";
 import { formatUsd } from "../utils/format.js";
 import { LIVE_API_ENABLED } from "../config/api.js";
 
@@ -85,7 +86,8 @@ export default function TopNav({ portfolioUsd = 0, cashUsd = 0 }) {
 
   return (
     <header className="top-nav">
-      <Link className="logo" to="/">
+      <Link className="logo" to="/" aria-label="fomo home">
+        <BrandLogo size={30} className="logo__mark" />
         fomo
       </Link>
 

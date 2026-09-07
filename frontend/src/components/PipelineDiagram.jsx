@@ -4,9 +4,9 @@
  */
 const TEXT = "#ffffff";
 const DIM = "rgba(255,255,255,0.38)";
-const LINE = "rgba(255,255,255,0.1)";
-const ACCENT = "#df2531";
-const SOFT = "rgba(223,37,49,0.65)";
+const LINE = "rgba(255,255,255,0.12)";
+const ACCENT = "#a855f7";
+const SOFT = "#c4b5fd";
 
 const STAGES = [
   { x: 24, label: "fomoapi.io", sub: "leaderboard · alerts", note: "keyless + key" },

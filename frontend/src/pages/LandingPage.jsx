@@ -1,20 +1,80 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import DashboardPreview, {
+  DashboardTerminalProvider,
+  MiniDashboard,
+  VolumeCard,
+} from "../components/DashboardPreview.jsx";
+import BrandLogo from "../components/BrandLogo.jsx";
+import TraderProfileModal from "../components/TraderProfileModal.jsx";
+import { TraderModalContext } from "../context/TraderModalContext.jsx";
 import GateStepper from "../components/GateStepper.jsx";
 import HeroTerminal from "../components/HeroTerminal.jsx";
 import PipelineDiagram from "../components/PipelineDiagram.jsx";
-import SizingLab from "../components/SizingLab.jsx";
 import { LIVE_API_ENABLED } from "../config/api.js";
 import { useCopyTrader } from "../hooks/useCopyTrader.js";
-import { useFomoAlerts } from "../hooks/useFomoAlerts.js";
 import { getBookTraders } from "../services/fomoApi.js";
+import { ThesisVisual, THESIS_VISUAL_BLOCKS, ThesisPullQuote } from "../components/ThesisVisuals.jsx";
 import { formatCompactUsd } from "../utils/format.js";
 import { fomoTraderUrl } from "../utils/links.js";
 import "./LandingPage.css";
 
 const REPO_URL = "https://github.com/Adi101-coder/FOMO";
 const FOLLOW_SET_SIZE = 30;
+const BOOK_LIMIT = 122;
 const SCAN_SECONDS = 20;
+
+const NAV = [
+  {
+    id: "product",
+    label: "Product",
+    items: [
+      { label: "Session terminal", to: "/app" },
+      { label: "The thesis", href: "#thesis" },
+      { label: "The book", href: "#book" },
+      { label: "Risk rails", href: "#rails" },
+    ],
+  },
+  { id: "terminal", label: "Terminal", to: "/app" },
+  {
+    id: "resources",
+    label: "Resources",
+    items: [
+      { label: "Documentation", to: "/docs" },
+      { label: "Formula reference", to: "/formulas" },
+      { label: "Source on GitHub", href: REPO_URL, external: true },
+    ],
+  },
+  { id: "docs", label: "Docs", to: "/docs" },
+  { id: "formulas", label: "Formulas", to: "/formulas" },
+];
+
+const PLATFORMS = [
+  { name: "Solana", mark: "solana" },
+  { name: "Base", mark: "base" },
+  { name: "BNB Chain", mark: "bnb" },
+  { name: "Ethereum", mark: "eth" },
+  { name: "Robinhood", mark: "robin" },
+  { name: "DexScreener", mark: "dex" },
+  { name: "Pons", mark: "pons" },
+  { name: "FOMO API", mark: "fomo" },
+];
+
+const BENTO = [
+  {
+    id: "dashboard",
+    accent: true,
+    visual: { type: "dashboard" },
+    title: "Terminal-grade dashboard",
+    body: "Read positions, live marks, and the full skip log in one pass — without touching the CLI.",
+  },
+  {
+    id: "reports",
+    visual: { type: "volume" },
+    title: "Live session reports",
+    body: "Realized and open PnL recomputed straight from the local ledger every five seconds.",
+  },
+];
 
 const WINDOWS = [
   { id: "24h", label: "24H" },
@@ -68,7 +128,6 @@ const RAILS = [
 const EXITS = [
   {
     style: "Trencher",
-    mult: "0.5×",
     time: "30 min",
     stop: "−15%",
     take: "+40%",
@@ -77,7 +136,6 @@ const EXITS = [
   },
   {
     style: "Flipper",
-    mult: "1.0×",
     time: "24 h",
     stop: "−25%",
     take: "—",
@@ -86,37 +144,11 @@ const EXITS = [
   },
   {
     style: "Holder",
-    mult: "1.5×",
     time: "14 d",
     stop: "−35%",
     take: "—",
     scale: "—",
     body: "Sized up, held longest, widest stop. These are the wallets that post a thesis, so the position lives until the thesis breaks or the trader sells.",
-  },
-];
-
-const MODES = [
-  {
-    mode: "Paper",
-    state: "default",
-    tone: "green",
-    points: [
-      "Fills simulated at live DexScreener quotes",
-      "No key, no signer, no broadcast path in the process",
-      "Full ledger: positions, marks, events, skip reasons",
-      "Costs nothing and can be reset by deleting one file",
-    ],
-  },
-  {
-    mode: "Live",
-    state: "off until you enable it",
-    tone: "amber",
-    points: [
-      "Needs live = true plus a Solana key you supply",
-      "Slippage capped at 300 bps in the config",
-      "Same gates, same sizer, same exits — nothing changes",
-      "We ship it off. Turning it on is your decision, not a default",
-    ],
   },
 ];
 
@@ -182,6 +214,28 @@ const CONFIG_FACTS = [
   ],
 ];
 
+function formatEth(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount === 0) {
+    return "—";
+  }
+  if (amount >= 1000) {
+    return amount.toLocaleString("en-US", { maximumFractionDigits: 1 });
+  }
+  if (amount >= 1) {
+    return amount.toFixed(2);
+  }
+  return amount.toFixed(3);
+}
+
+function formatBookPnl(value) {
+  const amount = Number(value) || 0;
+  if (amount === 0) {
+    return "$0";
+  }
+  return formatCompactUsd(amount);
+}
+
 function shortWallet(wallet) {
   if (!wallet) {
     return null;
@@ -190,28 +244,14 @@ function shortWallet(wallet) {
 }
 
 function explorerUrl(row) {
-  if (!row.wallet) {
+  const address = row.contract || row.wallet;
+  if (!address) {
     return fomoTraderUrl(row.handle);
   }
-  return row.walletIsSolana
-    ? `https://solscan.io/account/${row.wallet}`
-    : `https://etherscan.io/address/${row.wallet}`;
-}
-
-/** Alert timestamps arrive as either seconds or milliseconds. */
-function age(ts) {
-  const raw = Number(ts) || 0;
-  const ms = raw > 1e12 ? raw : raw * 1000;
-  const seconds = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86_400)}d`;
-}
-
-function alertSide(alert) {
-  const raw = String(alert.side || alert.alertType || alert.action || alert.type || "").toLowerCase();
-  return raw.includes("sell") ? "sell" : "buy";
+  const isSolana = row.walletIsSolana || (!address.startsWith("0x") && address.length > 32);
+  return isSolana
+    ? `https://solscan.io/account/${address}`
+    : `https://etherscan.io/address/${address}`;
 }
 
 function useScanCountdown() {
@@ -225,6 +265,122 @@ function useScanCountdown() {
   }, []);
 
   return String(left).padStart(2, "0");
+}
+
+function PlatformMark({ mark }) {
+  const props = { width: 18, height: 18, viewBox: "0 0 20 20", fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" };
+
+  if (mark === "solana") {
+    return (
+      <svg {...props}>
+        <path d="M5 6h9l-3 3H2zM6 10h9l-3 3H3zM5 14h9l-3 3H2z" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (mark === "base") {
+    return (
+      <svg {...props}>
+        <path d="M10 3a7 7 0 100 14h-.5V3z" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (mark === "bnb") {
+    return (
+      <svg {...props}>
+        <rect x="8.6" y="2.6" width="3.2" height="3.2" transform="rotate(45 10.2 4.2)" fill="currentColor" stroke="none" />
+        <rect x="8.6" y="8.6" width="3.2" height="3.2" transform="rotate(45 10.2 10.2)" fill="currentColor" stroke="none" />
+        <rect x="3.4" y="8.6" width="2.6" height="2.6" transform="rotate(45 4.7 9.9)" fill="currentColor" stroke="none" />
+        <rect x="14.2" y="8.6" width="2.6" height="2.6" transform="rotate(45 15.5 9.9)" fill="currentColor" stroke="none" />
+        <rect x="8.6" y="14.4" width="3.2" height="3.2" transform="rotate(45 10.2 16)" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (mark === "eth") {
+    return (
+      <svg {...props}>
+        <path d="M10 2l5 8-5 3-5-3z" fill="currentColor" stroke="none" opacity=".85" />
+        <path d="M10 14.2l5-3-5 6.8-5-6.8z" fill="currentColor" stroke="none" opacity=".55" />
+      </svg>
+    );
+  }
+  if (mark === "robin") {
+    return (
+      <svg {...props}>
+        <path d="M6 17V6a4 4 0 018 0v11" />
+        <path d="M6 11h8" />
+      </svg>
+    );
+  }
+  if (mark === "dex") {
+    return (
+      <svg {...props}>
+        <path d="M5 13V7M5 5v2M5 13v2M10 15V5M10 3v2M10 15v2M15 11V9M15 5v4M15 11v4" />
+      </svg>
+    );
+  }
+  if (mark === "pons") {
+    return (
+      <svg {...props}>
+        <path d="M3 14c0-4 3.1-7 7-7s7 3 7 7" />
+        <path d="M3 14h14M7 14v-3M13 14v-3" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...props}>
+      <path d="M10 3v14M3.9 6.5l12.2 7M16.1 6.5l-12.2 7" />
+    </svg>
+  );
+}
+
+function NavMenu({ item, openId, setOpenId }) {
+  const open = openId === item.id;
+
+  if (!item.items) {
+    return (
+      <Link className="nav__link" to={item.to}>
+        {item.label}
+      </Link>
+    );
+  }
+
+  return (
+    <div
+      className={open ? "nav__group is-open" : "nav__group"}
+      onMouseEnter={() => setOpenId(item.id)}
+      onMouseLeave={() => setOpenId(null)}
+    >
+      <button
+        type="button"
+        className="nav__link nav__link--toggle"
+        aria-expanded={open}
+        onClick={() => setOpenId(open ? null : item.id)}
+      >
+        {item.label}
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+          <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      <div className="nav__menu" role="menu">
+        {item.items.map((child) =>
+          child.external ? (
+            <a key={child.label} href={child.href} target="_blank" rel="noreferrer" role="menuitem">
+              {child.label}
+            </a>
+          ) : child.to ? (
+            <Link key={child.label} to={child.to} role="menuitem">
+              {child.label}
+            </Link>
+          ) : (
+            <a key={child.label} href={child.href} role="menuitem" onClick={() => setOpenId(null)}>
+              {child.label}
+            </a>
+          ),
+        )}
+      </div>
+    </div>
+  );
 }
 
 function Avatar({ row }) {
@@ -268,11 +424,35 @@ export default function LandingPage() {
   const [book, setBook] = useState([]);
   const [bookError, setBookError] = useState(null);
   const [bookLoading, setBookLoading] = useState(LIVE_API_ENABLED);
-  const [showAll, setShowAll] = useState(false);
+  const [bookLiveAt, setBookLiveAt] = useState(null);
+  const [openMenu, setOpenMenu] = useState(null);
+  const [selectedTrader, setSelectedTrader] = useState(null);
+  const navRef = useRef(null);
+
+  const openTrader = useCallback((row, rank) => {
+    setSelectedTrader({ ...row, rank: rank ?? row.rank });
+  }, []);
+
+  const traderModal = useMemo(
+    () => ({
+      openTrader,
+      book,
+    }),
+    [openTrader, book],
+  );
 
   const countdown = useScanCountdown();
   const { data: bot, error: botError } = useCopyTrader();
-  const { alerts, connected: streaming } = useFomoAlerts({ enabled: LIVE_API_ENABLED });
+
+  useEffect(() => {
+    function onPointerDown(event) {
+      if (navRef.current && !navRef.current.contains(event.target)) {
+        setOpenMenu(null);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, []);
 
   useEffect(() => {
     if (!LIVE_API_ENABLED) {
@@ -283,11 +463,12 @@ export default function LandingPage() {
     let active = true;
     setBookLoading(true);
 
-    getBookTraders({ window: windowId, limit: 100 })
+    getBookTraders({ window: windowId, limit: BOOK_LIMIT })
       .then((rows) => {
         if (active) {
           setBook(rows);
           setBookError(null);
+          setBookLiveAt(new Date());
         }
       })
       .catch((error) => {
@@ -309,111 +490,142 @@ export default function LandingPage() {
 
   const rows = useMemo(() => {
     const sorted = [...book];
-    if (sortBy === "vol") {
-      sorted.sort((a, b) => b.volumeRaw - a.volumeRaw);
-    }
-    if (sortBy === "followers") {
-      sorted.sort((a, b) => b.followers - a.followers);
+    if (sortBy === "mcap") {
+      sorted.sort((a, b) => b.followers - a.followers || b.pnlRaw - a.pnlRaw);
+    } else {
+      sorted.sort((a, b) => b.pnlRaw - a.pnlRaw || b.followers - a.followers);
     }
     return sorted;
   }, [book, sortBy]);
 
-  const visibleRows = showAll ? rows : rows.slice(0, 20);
+  const bookLiveLabel = bookLiveAt
+    ? bookLiveAt.toISOString().replace("T", " ").slice(0, 16)
+    : null;
   const stats = bot.stats;
   const marquee = book.slice(0, 14);
 
   return (
+    <DashboardTerminalProvider>
+    <TraderModalContext.Provider value={traderModal}>
     <div className="fx">
-      <header className="fx-nav">
-        <div className="fx-nav__inner">
-          <Link className="fx-brand" to="/">
-            <span className="fx-brand__mark" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
-            <span className="fx-brand__text">
-              fomo<b>copy</b>
-            </span>
+      {/* ── Nav ── */}
+      <header className="nav" ref={navRef}>
+        <div className="nav__inner">
+          <Link className="nav__logo" to="/" aria-label="fomocopy home">
+            <BrandLogo size={34} />
           </Link>
 
-          <nav className="fx-nav__links" aria-label="Main">
-            <Link to="/app">Terminal</Link>
-            <Link to="/docs">Docs</Link>
-            <Link to="/formulas">Formulas</Link>
-            <a href={REPO_URL} target="_blank" rel="noreferrer">
-              Source
-            </a>
+          <nav className="nav__pill" aria-label="Main">
+            {NAV.map((item) => (
+              <NavMenu key={item.id} item={item} openId={openMenu} setOpenId={setOpenMenu} />
+            ))}
           </nav>
-
-          <div className="fx-nav__right">
-            <span className="fx-mono fx-chip">
-              <i className={bot.mode === "live" ? "is-amber" : "is-green"} />
-              {bot.mode === "live" ? "live" : "paper"}
-            </span>
-            <span className="fx-mono fx-nav__stat">
-              {formatCompactUsd(bot.account_usd || 0)} acct
-            </span>
-            <span className="fx-mono fx-nav__stat">{stats?.open_count ?? 0}/6 open</span>
-            <span className="fx-mono fx-nav__stat fx-hide-sm">
-              next scan {countdown}s
-            </span>
-            <Link className="fx-btn fx-btn--sm" to="/app">
-              Open terminal
-            </Link>
-          </div>
         </div>
       </header>
 
-      <section className="fx-hero">
-        <div className="fx-hero__inner">
-          <div className="fx-hero__copy">
-            <h1>
-              The FOMO leaderboard,
-              <br />
-              <span className="fx-grad">run as a system</span>.
+      {/* ── Hero ── */}
+      <section className="hero">
+        <div className="hero__glow" aria-hidden="true" />
+
+        <div className="hero__inner">
+          <div className="hero__copy">
+            <h1 className="hero__title">
+              <span className="hero__title-primary">
+                <span className="hero__title-line">30 top traders.</span>
+                <span className="hero__title-line">One portfolio.</span>
+              </span>
+              <span className="hero__title-secondary">
+                The confluence fund that turns their{" "}
+                <em className="hero__emphasis">FOMO</em> into{" "}
+                <em className="hero__emphasis">your allocation.</em>
+              </span>
             </h1>
 
-            <p className="fx-hero__lede">
-              A copy-trading loop for fomo.family. It reads the top {FOLLOW_SET_SIZE} wallets by verified
-              on-chain PnL every {SCAN_SECONDS} seconds, puts every candidate through four gates in a fixed
-              order, sizes what survives against one account, and closes on a rule instead of a feeling.
-            </p>
-
-            <p className="fx-hero__lede">
-              You don&apos;t watch a screen. You read the log — including every trade it refused to take.
-            </p>
-
-            <div className="fx-hero__actions">
-              <Link className="fx-btn" to="/app">
-                Open the terminal
-              </Link>
-              <Link className="fx-btn fx-btn--ghost" to="/formulas">
-                Read the formulas
-              </Link>
-            </div>
-
-            <dl className="fx-hero__stats">
-              <div>
-                <dt className="fx-mono">Follow set</dt>
-                <dd>{FOLLOW_SET_SIZE} wallets</dd>
-              </div>
-              <div>
-                <dt className="fx-mono">Base / ceiling</dt>
-                <dd>2% / 6%</dd>
-              </div>
-              <div>
-                <dt className="fx-mono">Scan</dt>
-                <dd>{SCAN_SECONDS}s tick</dd>
-              </div>
-              <div>
-                <dt className="fx-mono">Daily stop</dt>
-                <dd>8%</dd>
-              </div>
-            </dl>
+            <Link className="btn btn--light hero__cta" to="/app">
+              Start in paper mode
+            </Link>
           </div>
 
-          <HeroTerminal />
+          <div className="hero__shot">
+            <DashboardPreview />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Platforms ── */}
+      <section className="logos">
+        <p className="logos__label">Reads live data from the venues the family trades on</p>
+
+        <div className="logos__grid">
+          {PLATFORMS.map((platform) => (
+            <div key={platform.name} className="logos__cell">
+              <PlatformMark mark={platform.mark} />
+              <span>{platform.name}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Thesis ── */}
+      <section id="thesis" className="thesis">
+        <div className="thesis__inner">
+          <div className="thesis__stat">
+            <p className="thesis__stat-label fx-mono">Top 30 cumulative PnL</p>
+            <div className="thesis__stat-row">
+              <span className="thesis__stat-from">$7M</span>
+              <span className="thesis__stat-arrow" aria-hidden="true">
+                →
+              </span>
+              <span className="thesis__stat-to">$45M</span>
+              <em className="thesis__stat-delta fx-mono">+700% in one month</em>
+            </div>
+            <p className="thesis__stat-note">
+              Top 30 cumulative PnL moved from <strong>$7M</strong> to <strong>$45M</strong> in one month.
+            </p>
+          </div>
+
+          <div className="thesis__grid">
+            {THESIS_VISUAL_BLOCKS.map((block) => (
+              <article key={block.id} className="thesis__card">
+                <div className="thesis__viz">
+                  <ThesisVisual id={block.id} />
+                  <span className="thesis__metric fx-mono">{block.metric}</span>
+                </div>
+                <h3>{block.title}</h3>
+                <p>{block.caption}</p>
+              </article>
+            ))}
+          </div>
+
+          <blockquote className="thesis__pull">
+            <ThesisPullQuote />
+          </blockquote>
+        </div>
+      </section>
+
+      {/* ── Features ── */}
+      <section className="features">
+        <h2 className="features__title">
+          Systematic, auditable, and built
+          <br />
+          for the cycle ahead.
+        </h2>
+
+        <div className="features__cards">
+          {BENTO.map((card) => (
+            <article
+              key={card.id}
+              className={`bento__card${card.accent ? " is-accent" : ""}`}
+            >
+              <div className="bento__visual">
+                {card.visual.type === "dashboard" ? <MiniDashboard /> : <VolumeCard />}
+              </div>
+              <div className="bento__text">
+                <h3>{card.title}</h3>
+                <p>{card.body}</p>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -432,462 +644,415 @@ export default function LandingPage() {
       ) : null}
 
       <main className="fx-main">
-          {/* 01 — the loop */}
-          <section id="loop" className="fx-section">
-            <SectionHead
-              n="01"
-              kicker="The loop"
-              title="Copy trading is a shift. This is a process."
-              lede="Manually mirroring a wallet means being awake, funded, and correct at the same moment. The loop replaces each of those requirements with something written down."
-            />
+        {/* 01 — the loop */}
+        <section id="loop" className="fx-section">
+          <SectionHead
+            n="01"
+            kicker="The loop"
+            title="Copy trading is a shift. This is a process."
+            lede="Manually mirroring a wallet means being awake, funded, and correct at the same moment. The loop replaces each of those requirements with something written down."
+          />
 
-            <div className="fx-versus">
-              <div className="fx-versus__head">
-                <span className="fx-mono">Doing it by hand</span>
-                <span className="fx-mono fx-green">Running the loop</span>
+          <div className="fx-versus">
+            <div className="fx-versus__head">
+              <span className="fx-mono">Doing it by hand</span>
+              <span className="fx-mono fx-green">Running the loop</span>
+            </div>
+            {MANUAL_VS_LOOP.map((row) => (
+              <div key={row.manual} className="fx-versus__row">
+                <p>
+                  <em aria-hidden="true">×</em>
+                  {row.manual}
+                </p>
+                <p>
+                  <em className="fx-green" aria-hidden="true">
+                    →
+                  </em>
+                  {row.loop}
+                </p>
               </div>
-              {MANUAL_VS_LOOP.map((row) => (
-                <div key={row.manual} className="fx-versus__row">
-                  <p>
-                    <em aria-hidden="true">×</em>
-                    {row.manual}
-                  </p>
-                  <p>
-                    <em className="fx-green" aria-hidden="true">
-                      →
-                    </em>
-                    {row.loop}
-                  </p>
+            ))}
+          </div>
+
+          <p className="fx-pull">
+            Same bet on the same wallets — without the shift, and without the discretion.
+          </p>
+        </section>
+
+        {/* 02 — gates */}
+        <section id="gates" className="fx-section">
+          <SectionHead
+            n="02"
+            kicker="Entry"
+            title="Four gates, one order, no exceptions"
+            lede="Cheap checks run before expensive ones, so most candidates die before a single API credit is spent. Only the last gate has alternatives — and one of the three is enough."
+          />
+          <GateStepper />
+        </section>
+
+        {/* 04 — the book */}
+        <section id="book" className="fx-section fx-section--book">
+          <SectionHead
+            n="04"
+            kicker="The book"
+            title="The 122"
+            lede="Ranked from the live FOMO leaderboard. Not on PnL alone: a coin needs a buyer base, so audience carries the same weight as profit."
+            aside={
+              <div className="fx-controls fx-controls--book">
+                <div className="fx-seg fx-seg--sm">
+                  {[
+                    { id: "mcap", label: "MCAP" },
+                    { id: "pnl", label: "PNL" },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={sortBy === item.id ? "is-active" : undefined}
+                      onClick={() => setSortBy(item.id)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
-              ))}
+                <div className="fx-seg fx-seg--sm">
+                  {WINDOWS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={windowId === item.id ? "is-active" : undefined}
+                      onClick={() => setWindowId(item.id)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                {bookLiveLabel ? (
+                  <p className="fx-book__live fx-mono">
+                    LIVE <time dateTime={bookLiveAt?.toISOString()}>{bookLiveLabel} UTC</time>
+                  </p>
+                ) : null}
+              </div>
+            }
+          />
+
+          <div className="fx-book">
+            <div className="fx-book__head fx-mono">
+              <span>#</span>
+              <span>Trader</span>
+              <span>Ticker</span>
+              <span className="fx-r">PnL {windowId.toUpperCase()}</span>
+              <span className="fx-r">Followers</span>
+              <span className="fx-r">Fees ETH</span>
+              <span className="fx-r">Mcap ETH</span>
+              <span>Contract</span>
+              <span />
             </div>
 
-            <p className="fx-pull">
-              Same bet on the same wallets — without the shift, and without the discretion.
-            </p>
-          </section>
-
-          {/* 02 — gates */}
-          <section id="gates" className="fx-section">
-            <SectionHead
-              n="02"
-              kicker="Entry"
-              title="Four gates, one order, no exceptions"
-              lede="Cheap checks run before expensive ones, so most candidates die before a single API credit is spent. Only the last gate has alternatives — and one of the three is enough."
-            />
-            <GateStepper />
-          </section>
-
-          {/* 03 — sizing */}
-          <section id="sizing" className="fx-section">
-            <SectionHead
-              n="03"
-              kicker="Sizing"
-              title="Three formulas. One is running."
-              lede="Move the inputs and watch the size change. This is the arithmetic in fomo_cli/sizing.py — the same call the loop makes when a signal clears gate 04."
-            />
-            <SizingLab />
-          </section>
-
-          {/* 04 — the book */}
-          <section id="book" className="fx-section">
-            <SectionHead
-              n="04"
-              kicker="The book"
-              title={`The ${book.length || 100}`}
-              lede="Ranked live from the FOMO leaderboard. The top 30 form the follow set the loop actually reads; the rest stay scored so the confluence gate has something to compare against."
-              aside={
-                <div className="fx-controls">
-                  <div className="fx-seg fx-seg--sm">
-                    {["pnl", "vol", "followers"].map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        className={sortBy === key ? "is-active" : undefined}
-                        onClick={() => setSortBy(key)}
-                      >
-                        {key === "pnl" ? "PnL" : key === "vol" ? "Volume" : "Reach"}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="fx-seg fx-seg--sm">
-                    {WINDOWS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={windowId === item.id ? "is-active" : undefined}
-                        onClick={() => setWindowId(item.id)}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              }
-            />
-
-            <div className="fx-table">
-              <div className="fx-table__head fx-mono">
-                <span>#</span>
-                <span>Trader</span>
-                <span>Ticker</span>
-                <span className="fx-r">PnL {windowId}</span>
-                <span className="fx-r">Followers</span>
-                <span className="fx-r">Trades</span>
-                <span>In set</span>
-                <span>Wallet</span>
-                <span />
-              </div>
-
+            <div className="fx-book__body">
               {bookLoading && rows.length === 0 ? (
-                <p className="fx-note fx-mono">loading the book…</p>
+                <p className="fx-book__note fx-mono">Loading the book…</p>
               ) : null}
-              {bookError ? <p className="fx-note fx-mono fx-red">{bookError}</p> : null}
+              {bookError ? <p className="fx-book__note fx-mono fx-book__note--error">{bookError}</p> : null}
               {!LIVE_API_ENABLED ? (
-                <p className="fx-note fx-mono">
-                  set VITE_LIVE_API=true in frontend/.env to fill the book
+                <p className="fx-book__note fx-mono">
+                  Set VITE_LIVE_API=true and FOMO_API_KEY in frontend/.env to fill the book
                 </p>
               ) : null}
 
-              {visibleRows.map((row, index) => (
-                <div key={row.id} className="fx-row">
-                  <span className="fx-mono fx-row__rank">{index + 1}</span>
+              {rows.map((row, index) => (
+                <div key={row.id} className="fx-book__row">
+                  <span className="fx-mono fx-book__rank">{index + 1}</span>
 
-                  <a className="fx-row__trader" href={fomoTraderUrl(row.handle)} target="_blank" rel="noreferrer">
-                    <Avatar row={row} />
-                    <span>
-                      <strong>{row.name}</strong>
-                      <em className="fx-mono">@{row.handle}</em>
-                    </span>
-                  </a>
+                  {index < FOLLOW_SET_SIZE ? (
+                    <button
+                      type="button"
+                      className="fx-book__trader"
+                      onClick={() => openTrader(row, index + 1)}
+                      aria-label={`Open profile for @${row.handle}`}
+                    >
+                      <Avatar row={row} />
+                      <span>
+                        <strong>{row.name}</strong>
+                        <em className="fx-mono">@{row.handle}</em>
+                      </span>
+                    </button>
+                  ) : (
+                    <a className="fx-book__trader" href={fomoTraderUrl(row.handle)} target="_blank" rel="noreferrer">
+                      <Avatar row={row} />
+                      <span>
+                        <strong>{row.name}</strong>
+                        <em className="fx-mono">@{row.handle}</em>
+                      </span>
+                    </a>
+                  )}
 
-                  <span className="fx-mono fx-row__ticker">{row.ticker}</span>
-                  <span className={`fx-mono fx-r ${row.pnlRaw >= 0 ? "fx-green" : "fx-red"}`}>
-                    {formatCompactUsd(row.pnlRaw)}
+                  <span className="fx-mono fx-book__ticker">{row.ticker}</span>
+
+                  <span
+                    className={`fx-mono fx-r fx-book__pnl ${
+                      row.pnlRaw > 0 ? "is-up" : row.pnlRaw < 0 ? "is-down" : "is-flat"
+                    }`}
+                  >
+                    {formatBookPnl(row.pnlRaw)}
                   </span>
-                  <span className="fx-mono fx-r fx-dim">{row.followers.toLocaleString("en-US")}</span>
-                  <span className="fx-mono fx-r fx-dim">{row.trades.toLocaleString("en-US")}</span>
-                  <span>
-                    {index < FOLLOW_SET_SIZE ? (
-                      <em className="fx-mono fx-pill">followed</em>
-                    ) : (
-                      <em className="fx-mono fx-dim">—</em>
-                    )}
+
+                  <span className="fx-mono fx-r fx-book__muted">{row.followers.toLocaleString("en-US")}</span>
+
+                  <span className="fx-mono fx-r fx-book__muted fx-book__fees">
+                    {formatEth(row.feesEth)}
+                    {row.graduated ? <i className="fx-book__badge">Graduated</i> : null}
                   </span>
 
-                  <a className="fx-row__wallet fx-mono" href={explorerUrl(row)} target="_blank" rel="noreferrer">
-                    {shortWallet(row.wallet) || "profile"}
-                  </a>
+                  <span className="fx-mono fx-r fx-book__muted">{formatEth(row.mcapEth)}</span>
 
-                  <Link className="fx-btn fx-btn--xs" to="/app">
-                    Copy
+                  <span className="fx-book__contract">
+                    <a className="fx-mono" href={explorerUrl(row)} target="_blank" rel="noreferrer">
+                      {shortWallet(row.contract || row.wallet) || "profile"}
+                    </a>
+                    {row.contract || row.wallet ? (
+                      <a className="fx-mono fx-book__explorer" href={explorerUrl(row)} target="_blank" rel="noreferrer">
+                        explorer
+                      </a>
+                    ) : null}
+                  </span>
+
+                  <Link className="btn btn--book" to="/app">
+                    Buy
                   </Link>
                 </div>
               ))}
-
-              {rows.length > 20 ? (
-                <button type="button" className="fx-more fx-mono" onClick={() => setShowAll((value) => !value)}>
-                  {showAll ? "Collapse" : `Show all ${rows.length} ranked wallets`}
-                </button>
-              ) : null}
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* 05 — session */}
-          <section id="session" className="fx-section">
-            <SectionHead
-              n="05"
-              kicker="Session"
-              title="What the loop has actually done"
-              lede="Read straight from the local ledger every five seconds. If the API is not running these read zero — the page does not invent numbers to look busy."
-              aside={
-                botError ? (
-                  <p className="fx-mono fx-note fx-amber">
-                    api offline — start python -m binance_trade_bot.api_server
-                  </p>
-                ) : null
-              }
-            />
+        {/* 05 — session */}
+        <section id="session" className="fx-section">
+          <SectionHead
+            n="05"
+            kicker="Session"
+            title="What the loop has actually done"
+            lede="Read straight from the local ledger every five seconds. If the API is not running these read zero — the page does not invent numbers to look busy."
+            aside={
+              botError ? (
+                <p className="fx-mono fx-note fx-amber">
+                  api offline — start python -m binance_trade_bot.api_server
+                </p>
+              ) : null
+            }
+          />
 
-            <div className="fx-metrics">
-              {[
-                {
-                  label: "Account",
-                  value: formatCompactUsd(bot.account_usd || 0),
-                  note: "paper capital the sizer works against",
-                },
-                {
-                  label: "Total PnL",
-                  value: formatCompactUsd(stats?.total_pnl ?? 0),
-                  note: "realized plus open, at live marks",
-                  tone: (stats?.total_pnl ?? 0) >= 0 ? "green" : "red",
-                },
-                {
-                  label: "ROI",
-                  value: `${(stats?.roi_pct ?? 0).toFixed(2)}%`,
-                  note: "against the configured account",
-                  tone: (stats?.roi_pct ?? 0) >= 0 ? "green" : "red",
-                },
-                {
-                  label: "Open",
-                  value: `${stats?.open_count ?? 0} / 6`,
-                  note: `${formatCompactUsd(stats?.open_capital ?? 0)} deployed`,
-                },
-                {
-                  label: "Closed",
-                  value: `${stats?.closed_trades ?? 0}`,
-                  note: "round trips the exit rules finished",
-                },
-                {
-                  label: "Win rate",
-                  value: stats?.win_rate != null ? `${Math.round(stats.win_rate * 100)}%` : "—",
-                  note: stats ? `${stats.wins}W / ${stats.losses}L` : "no closed trades yet",
-                },
-                {
-                  label: "Session",
-                  value: stats ? `${(stats.session_hours || 0).toFixed(1)}h` : "—",
-                  note: "since the loop last booted",
-                },
-                {
-                  label: "24h PnL",
-                  value: formatCompactUsd(stats?.day_pnl ?? 0),
-                  note: "what the 8% stop is measured on",
-                  tone: (stats?.day_pnl ?? 0) >= 0 ? "green" : "red",
-                },
-              ].map((metric) => (
-                <article key={metric.label}>
-                  <p className="fx-mono fx-metric__label">{metric.label}</p>
-                  <p className={`fx-metric__value fx-mono${metric.tone ? ` fx-${metric.tone}` : ""}`}>
-                    {metric.value}
-                  </p>
-                  <p className="fx-metric__note">{metric.note}</p>
-                </article>
-              ))}
-            </div>
-          </section>
+          <div className="fx-metrics">
+            {[
+              {
+                label: "Account",
+                value: formatCompactUsd(bot.account_usd || 0),
+                note: "paper capital the sizer works against",
+              },
+              {
+                label: "Total PnL",
+                value: formatCompactUsd(stats?.total_pnl ?? 0),
+                note: "realized plus open, at live marks",
+                tone: (stats?.total_pnl ?? 0) >= 0 ? "green" : "red",
+              },
+              {
+                label: "ROI",
+                value: `${(stats?.roi_pct ?? 0).toFixed(2)}%`,
+                note: "against the configured account",
+                tone: (stats?.roi_pct ?? 0) >= 0 ? "green" : "red",
+              },
+              {
+                label: "Open",
+                value: `${stats?.open_count ?? 0} / 6`,
+                note: `${formatCompactUsd(stats?.open_capital ?? 0)} deployed`,
+              },
+              {
+                label: "Closed",
+                value: `${stats?.closed_trades ?? 0}`,
+                note: "round trips the exit rules finished",
+              },
+              {
+                label: "Win rate",
+                value: stats?.win_rate != null ? `${Math.round(stats.win_rate * 100)}%` : "—",
+                note: stats ? `${stats.wins}W / ${stats.losses}L` : "no closed trades yet",
+              },
+              {
+                label: "Session",
+                value: stats ? `${(stats.session_hours || 0).toFixed(1)}h` : "—",
+                note: "since the loop last booted",
+              },
+              {
+                label: "24h PnL",
+                value: formatCompactUsd(stats?.day_pnl ?? 0),
+                note: "what the 8% stop is measured on",
+                tone: (stats?.day_pnl ?? 0) >= 0 ? "green" : "red",
+              },
+            ].map((metric) => (
+              <article key={metric.label}>
+                <p className="fx-mono fx-metric__label">{metric.label}</p>
+                <p className={`fx-metric__value${metric.tone ? ` fx-${metric.tone}` : ""}`}>{metric.value}</p>
+                <p className="fx-metric__note">{metric.note}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
-          {/* 06 — the tape */}
-          <section id="tape" className="fx-section">
-            <SectionHead
-              n="06"
-              kicker="The tape"
-              title="What the follow set is doing"
-              lede="Live from the fomoapi websocket. This is the raw material gate 04 reads — every entry the loop takes started as one of these lines."
-              aside={
-                <span className={`fx-mono fx-chip${streaming ? " is-on" : ""}`}>
-                  <i className={streaming ? "is-green" : ""} />
-                  {streaming ? "streaming" : "offline"}
-                </span>
-              }
-            />
+        {/* 07 — pipeline */}
+        <section id="pipeline" className="fx-section">
+          <SectionHead
+            n="07"
+            kicker="Architecture"
+            title="One scan, end to end"
+            lede="Keys stay server-side in the proxy. The loop writes to one SQLite ledger, and both the terminal and this page read that same snapshot — there is no second source of truth."
+          />
+          <PipelineDiagram />
+        </section>
 
-            <div className="fx-feed">
-              {alerts.length === 0 ? (
-                <p className="fx-note fx-mono">waiting for the next trade on the tape…</p>
-              ) : (
-                alerts.slice(0, 14).map((alert) => {
-                  const side = alertSide(alert);
-                  return (
-                    <div key={alert.id || `${alert.trader}-${alert.ts}`} className="fx-feed__row">
-                      <em className={`fx-mono fx-side is-${side}`}>{side}</em>
-                      <p>
-                        <strong>@{alert.trader}</strong> {side === "sell" ? "sold" : "bought"}{" "}
-                        <b className="fx-violet">${alert.token}</b>
-                      </p>
-                      <span className="fx-mono">{formatCompactUsd(alert.usd || alert.amountUsd || 0)}</span>
-                      <span className="fx-mono fx-dim">{age(alert.ts)}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
+        {/* 08 — rails */}
+        <section id="rails" className="fx-section">
+          <SectionHead
+            n="08"
+            kicker="Risk"
+            title="The rails that make it boring"
+            lede="Every number here lives in fomo_cli.cfg and is read once at boot. None of them can be raised by the loop while it is running."
+          />
 
-          {/* 07 — pipeline */}
-          <section id="pipeline" className="fx-section">
-            <SectionHead
-              n="07"
-              kicker="Architecture"
-              title="One scan, end to end"
-              lede="Keys stay server-side in the proxy. The loop writes to one SQLite ledger, and both the terminal and this page read that same snapshot — there is no second source of truth."
-            />
-            <PipelineDiagram />
-          </section>
+          <div className="fx-rails">
+            {RAILS.map((rail) => (
+              <article key={rail.label}>
+                <p className="fx-mono fx-metric__label">{rail.label}</p>
+                <p className="fx-rails__value">{rail.value}</p>
+                <p>{rail.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
-          {/* 08 — rails */}
-          <section id="rails" className="fx-section">
-            <SectionHead
-              n="08"
-              kicker="Risk"
-              title="The rails that make it boring"
-              lede="Every number here lives in fomo_cli.cfg and is read once at boot. None of them can be raised by the loop while it is running."
-            />
+        {/* 09 — exits */}
+        <section id="exits" className="fx-section">
+          <SectionHead
+            n="09"
+            kicker="Exits"
+            title="The style decides how it ends"
+            lede="A wallet is classified from median hold time, thesis count, and typical size. That single label sets both the multiplier on the way in and the rules on the way out."
+          />
 
-            <div className="fx-rails">
-              {RAILS.map((rail) => (
-                <article key={rail.label}>
-                  <p className="fx-mono fx-metric__label">{rail.label}</p>
-                  <p className="fx-rails__value fx-mono">{rail.value}</p>
-                  <p>{rail.body}</p>
-                </article>
-              ))}
-            </div>
-          </section>
+          <div className="fx-exits">
+            {EXITS.map((exit) => (
+              <article key={exit.style}>
+                <header>
+                  <h3>{exit.style}</h3>
+                </header>
+                <p className="fx-exits__body">{exit.body}</p>
+                <dl className="fx-mono">
+                  <div>
+                    <dt>Time stop</dt>
+                    <dd>{exit.time}</dd>
+                  </div>
+                  <div>
+                    <dt>Stop</dt>
+                    <dd className="fx-red">{exit.stop}</dd>
+                  </div>
+                  <div>
+                    <dt>Take</dt>
+                    <dd className={exit.take === "—" ? "fx-dim" : "fx-green"}>{exit.take}</dd>
+                  </div>
+                  <div>
+                    <dt>Scale out</dt>
+                    <dd className={exit.scale === "—" ? "fx-dim" : "fx-green"}>{exit.scale}</dd>
+                  </div>
+                  <div>
+                    <dt>Follows their sell</dt>
+                    <dd className="fx-green">yes</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </section>
 
-          {/* 09 — exits */}
-          <section id="exits" className="fx-section">
-            <SectionHead
-              n="09"
-              kicker="Exits"
-              title="The style decides how it ends"
-              lede="A wallet is classified from median hold time, thesis count, and typical size. That single label sets both the multiplier on the way in and the rules on the way out."
-            />
+        {/* 11 — trust */}
+        <section id="trust" className="fx-section">
+          <SectionHead
+            n="11"
+            kicker="Custody"
+            title="There is nothing here to take"
+            lede="The honest version of a trust section: in paper mode the software has no custody, so the question of whether we would move your funds does not arise."
+          />
 
-            <div className="fx-exits">
-              {EXITS.map((exit) => (
-                <article key={exit.style}>
-                  <header>
-                    <h3>{exit.style}</h3>
-                  </header>
-                  <p className="fx-exits__body">{exit.body}</p>
-                  <dl className="fx-mono">
-                    <div>
-                      <dt>Time stop</dt>
-                      <dd>{exit.time}</dd>
-                    </div>
-                    <div>
-                      <dt>Stop</dt>
-                      <dd className="fx-red">{exit.stop}</dd>
-                    </div>
-                    <div>
-                      <dt>Take</dt>
-                      <dd className={exit.take === "—" ? "fx-dim" : "fx-green"}>{exit.take}</dd>
-                    </div>
-                    <div>
-                      <dt>Scale out</dt>
-                      <dd className={exit.scale === "—" ? "fx-dim" : "fx-green"}>{exit.scale}</dd>
-                    </div>
-                    <div>
-                      <dt>Follows their sell</dt>
-                      <dd className="fx-green">yes</dd>
-                    </div>
-                  </dl>
-                </article>
-              ))}
-            </div>
-          </section>
+          <div className="fx-tri">
+            {TRUST.map((item) => (
+              <article key={item.label}>
+                <p className="fx-mono fx-metric__label">{item.label}</p>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
 
-          {/* 10 — modes */}
-          <section id="modes" className="fx-section">
-            <SectionHead
-              n="10"
-              kicker="Execution"
-              title="Paper is the default, not the demo"
-              lede="Both modes run identical gates, sizing, and exits. The only difference is whether a fill is simulated against a quote or signed against a wallet."
-            />
+          <div className="fx-verify">
+            <h3>Check it yourself in 30 seconds</h3>
+            <p>
+              You don&apos;t have to read the whole codebase. A loop can only do what its functions let it do,
+              and three of them touch a position. None of them holds a key.
+            </p>
 
-            <div className="fx-modes">
-              {MODES.map((mode) => (
-                <article key={mode.mode} className={`fx-mode is-${mode.tone}`}>
-                  <header>
-                    <h3>{mode.mode}</h3>
-                    <span className="fx-mono fx-pill">{mode.state}</span>
-                  </header>
-                  <ul>
-                    {mode.points.map((point) => (
-                      <li key={point}>
-                        <em aria-hidden="true">—</em>
-                        {point}
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          {/* 11 — trust */}
-          <section id="trust" className="fx-section">
-            <SectionHead
-              n="11"
-              kicker="Custody"
-              title="There is nothing here to take"
-              lede="The honest version of a trust section: in paper mode the software has no custody, so the question of whether we would move your funds does not arise."
-            />
-
-            <div className="fx-tri">
-              {TRUST.map((item) => (
-                <article key={item.label}>
-                  <p className="fx-mono fx-metric__label">{item.label}</p>
-                  <p>{item.body}</p>
+            <div className="fx-fns">
+              {FUNCTIONS.map((fn) => (
+                <article key={fn.name}>
+                  <p className="fx-mono fx-fn__name">{fn.name}</p>
+                  <p className="fx-mono fx-fn__file">{fn.file}</p>
+                  <p>{fn.body}</p>
                 </article>
               ))}
             </div>
 
-            <div className="fx-verify">
-              <h3>Check it yourself in 30 seconds</h3>
-              <p>
-                You don&apos;t have to read the whole codebase. A loop can only do what its functions let it
-                do, and three of them touch a position. None of them holds a key.
-              </p>
+            <ol className="fx-steps">
+              <li>
+                <span className="fx-mono">1</span>
+                <p>
+                  <strong>Open the source.</strong> Everything the loop can do is in <code>fomo_cli/</code> —
+                  eight files, no build step.
+                </p>
+              </li>
+              <li>
+                <span className="fx-mono">2</span>
+                <p>
+                  <strong>Search for the executor.</strong> In paper mode it returns a simulated fill from a
+                  quote. There is no signing path to find.
+                </p>
+              </li>
+              <li>
+                <span className="fx-mono">3</span>
+                <p>
+                  <strong>Delete the ledger.</strong> <code>data/fomo_cli.sqlite</code> is the entire state.
+                  Removing it resets the account to the config.
+                </p>
+              </li>
+            </ol>
 
-              <div className="fx-fns">
-                {FUNCTIONS.map((fn) => (
-                  <article key={fn.name}>
-                    <p className="fx-mono fx-fn__name">{fn.name}</p>
-                    <p className="fx-mono fx-fn__file">{fn.file}</p>
-                    <p>{fn.body}</p>
-                  </article>
-                ))}
-              </div>
-
-              <ol className="fx-steps">
-                <li>
-                  <span className="fx-mono">1</span>
-                  <p>
-                    <strong>Open the source.</strong> Everything the loop can do is in{" "}
-                    <code>fomo_cli/</code> — eight files, no build step.
-                  </p>
-                </li>
-                <li>
-                  <span className="fx-mono">2</span>
-                  <p>
-                    <strong>Search for the executor.</strong> In paper mode it returns a simulated fill from a
-                    quote. There is no signing path to find.
-                  </p>
-                </li>
-                <li>
-                  <span className="fx-mono">3</span>
-                  <p>
-                    <strong>Delete the ledger.</strong> <code>data/fomo_cli.sqlite</code> is the entire state.
-                    Removing it resets the account to the config.
-                  </p>
-                </li>
-              </ol>
-
-              <div className="fx-verify__links">
-                <a className="fx-mono" href={`${REPO_URL}/blob/master/fomo_cli/copytrader.py`} target="_blank" rel="noreferrer">
-                  fomo_cli/copytrader.py
-                </a>
-                <a className="fx-mono" href={`${REPO_URL}/blob/master/fomo_cli/sizing.py`} target="_blank" rel="noreferrer">
-                  fomo_cli/sizing.py
-                </a>
-                <a className="fx-mono" href={`${REPO_URL}/blob/master/fomo_cli/formulas.py`} target="_blank" rel="noreferrer">
-                  fomo_cli/formulas.py
-                </a>
-              </div>
+            <div className="fx-verify__links">
+              <a className="fx-mono" href={`${REPO_URL}/blob/master/fomo_cli/copytrader.py`} target="_blank" rel="noreferrer">
+                fomo_cli/copytrader.py
+              </a>
+              <a className="fx-mono" href={`${REPO_URL}/blob/master/fomo_cli/sizing.py`} target="_blank" rel="noreferrer">
+                fomo_cli/sizing.py
+              </a>
+              <a className="fx-mono" href={`${REPO_URL}/blob/master/fomo_cli/formulas.py`} target="_blank" rel="noreferrer">
+                fomo_cli/formulas.py
+              </a>
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* 12 — CLI */}
-          <section id="cli" className="fx-section">
-            <SectionHead
-              n="12"
-              kicker="The CLI"
-              title="The terminal is the primary surface"
-              lede="The dashboard renders what the CLI already prints. Anything you can see on a chart, you can read as a line — including the reason a trade was refused."
-            />
+        {/* 12 — CLI */}
+        <section id="cli" className="fx-section">
+          <SectionHead
+            n="12"
+            kicker="The CLI"
+            title="The terminal is the primary surface"
+            lede="The dashboard renders what the CLI already prints. Anything you can see on a chart, you can read as a line — including the reason a trade was refused."
+          />
 
+          <div className="fx-cli-grid">
             <div className="fx-cli">
               {CLI.map((row) => (
                 <div key={row.cmd} className="fx-cli__row">
@@ -896,73 +1061,81 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-          </section>
 
-          {/* 13 — config */}
-          <section id="config" className="fx-section">
-            <SectionHead
-              n="13"
-              kicker="The terms"
-              title="Written in the config"
-              lede="Nothing on this page is a policy we can change quietly. Every value below is read from a file you own, at boot, and printed in the banner when the loop starts."
-            />
+            <HeroTerminal />
+          </div>
+        </section>
 
-            <div className="fx-config">
-              {CONFIG_FACTS.map((column, index) => (
-                <div key={index}>
-                  {column.map((fact) => (
-                    <div key={fact.label} className="fx-fact">
-                      <p className="fx-mono fx-metric__label">{fact.label}</p>
-                      <p className={fact.mono ? "fx-mono fx-fact__mono" : undefined}>{fact.value}</p>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
+        {/* 13 — config */}
+        <section id="config" className="fx-section">
+          <SectionHead
+            n="13"
+            kicker="The terms"
+            title="Written in the config"
+            lede="Nothing on this page is a policy we can change quietly. Every value below is read from a file you own, at boot, and printed in the banner when the loop starts."
+          />
 
-            <div className="fx-cta">
-              <div>
-                <h3>Run it in paper mode in about two minutes.</h3>
-                <p>
-                  Copy the example config, start the loop, open the terminal. No wallet, no key, no money —
-                  and the skip log starts filling immediately.
-                </p>
+          <div className="fx-config">
+            {CONFIG_FACTS.map((column, index) => (
+              <div key={index}>
+                {column.map((fact) => (
+                  <div key={fact.label} className="fx-fact">
+                    <p className="fx-mono fx-metric__label">{fact.label}</p>
+                    <p className={fact.mono ? "fx-mono fx-fact__mono" : undefined}>{fact.value}</p>
+                  </div>
+                ))}
               </div>
-              <div className="fx-cta__actions">
-                <Link className="fx-btn" to="/docs">
-                  Setup guide
-                </Link>
-                <Link className="fx-btn fx-btn--ghost" to="/app">
-                  Open terminal
-                </Link>
-              </div>
-            </div>
-          </section>
+            ))}
+          </div>
 
-          <footer className="fx-footer">
+          <div className="fx-cta">
+            <div className="fx-cta__glow" aria-hidden="true" />
             <div>
-              <Link className="fx-brand fx-brand--sm" to="/">
-                <span className="fx-brand__text">
-                  fomo<b>copy</b>
-                </span>
-              </Link>
-              <p className="fx-mono">
-                unofficial tooling for fomo.family · paper by default · not financial advice
+              <h3>Run it in paper mode in about two minutes.</h3>
+              <p>
+                Copy the example config, start the loop, open the terminal. No wallet, no key, no money — and
+                the skip log starts filling immediately.
               </p>
             </div>
-            <nav className="fx-footer__links fx-mono">
-              <Link to="/app">Terminal</Link>
-              <Link to="/docs">Docs</Link>
-              <Link to="/formulas">Formulas</Link>
-              <a href={REPO_URL} target="_blank" rel="noreferrer">
-                Source
-              </a>
-              <a href="https://fomo.family" target="_blank" rel="noreferrer">
-                fomo.family
-              </a>
-            </nav>
-          </footer>
+            <div className="fx-cta__actions">
+              <Link className="btn btn--light" to="/docs">
+                Setup guide
+              </Link>
+              <Link className="btn btn--ghost" to="/app">
+                Open terminal
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <footer className="fx-footer">
+          <div>
+            <BrandLogo size={28} />
+            <p>unofficial tooling for fomo.family · paper by default · not financial advice</p>
+          </div>
+
+          <nav className="fx-footer__links">
+            <Link to="/app">Terminal</Link>
+            <Link to="/docs">Docs</Link>
+            <Link to="/formulas">Formulas</Link>
+            <a href={REPO_URL} target="_blank" rel="noreferrer">
+              Source
+            </a>
+            <a href="https://fomo.family" target="_blank" rel="noreferrer">
+              fomo.family
+            </a>
+            <span className="fx-footer__stat">
+              {bot.mode === "live" ? "live" : "paper"} · {stats?.open_count ?? 0}/6 open · scan {countdown}s
+            </span>
+          </nav>
+        </footer>
       </main>
     </div>
+
+    {selectedTrader ? (
+      <TraderProfileModal trader={selectedTrader} onClose={() => setSelectedTrader(null)} />
+    ) : null}
+    </TraderModalContext.Provider>
+    </DashboardTerminalProvider>
   );
 }
