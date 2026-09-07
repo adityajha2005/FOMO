@@ -2314,3 +2314,32 @@
   font-family: Consolas, "Courier New", monospace;
   font-size: 0.8125rem;
 }
+
+/* pipeline diagram (docs + shared) */
+.fx-pipe {
+  margin-top: 1.25rem;
+  padding: 32px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: #141018;
+}
+
+.fx-pipe svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.fx-pipe__label {
+  font-family: "Inter Tight", Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.fx-pipe__cap,
+.fx-pipe__sub,
+.fx-pipe__note {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+}

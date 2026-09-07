@@ -456,8 +456,9 @@ body:has(.fx) {
 .hero__shot {
   position: relative;
   width: 100%;
-  margin-top: 72px;
-  padding-bottom: 96px;
+  max-width: 920px;
+  margin: 48px auto 0;
+  padding-bottom: 56px;
 }
 
 .hero__shot::before {
@@ -1058,6 +1059,67 @@ body:has(.fx) {
 
 .dp__card--wide .dp__chart {
   margin-top: 10px;
+}
+
+/* dense variant for the hero preview */
+.dp--dense .dp__bar {
+  height: 32px;
+  padding: 0 12px;
+}
+
+.dp--dense .dp__body {
+  grid-template-columns: 148px minmax(0, 1fr);
+}
+
+.dp--dense .dp__side {
+  padding: 10px 8px;
+}
+
+.dp--dense .dp__nav {
+  padding: 5px 8px;
+  font-size: 10.5px;
+  gap: 7px;
+}
+
+.dp--dense .dp__main {
+  padding: 12px 14px 14px;
+}
+
+.dp--dense .dp__head {
+  margin-bottom: 10px;
+}
+
+.dp--dense .dp__search {
+  max-width: 200px;
+  padding: 5px 10px;
+  font-size: 10.5px;
+}
+
+.dp--dense .dp__grid {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dp--dense .dp__card {
+  padding: 11px 12px 10px;
+}
+
+.dp--dense .dp__value {
+  margin-top: 4px !important;
+  font-size: 19px;
+}
+
+.dp--dense .dp__chart-wrap {
+  margin-top: 8px;
+}
+
+.dp--dense .dp__sub {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.dp--dense .dp__list li {
+  padding: 2px 0;
 }
 
 /* mini + card variants for the bento */
@@ -2607,34 +2669,6 @@ button.fx-book__trader:hover strong {
   color: var(--down);
 }
 
-/* pipeline */
-.fx-pipe {
-  padding: 32px 28px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--panel);
-}
-
-.fx-pipe svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.fx-pipe__label {
-  font-family: "Inter Tight", Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.fx-pipe__cap,
-.fx-pipe__sub,
-.fx-pipe__note {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.06em;
-}
-
 /* rails + tri */
 .fx-rails,
 .fx-tri {
@@ -3220,8 +3254,8 @@ button.fx-book__trader:hover strong {
   }
 
   .hero__shot {
-    margin-top: 44px;
-    padding-bottom: 72px;
+    margin-top: 32px;
+    padding-bottom: 48px;
   }
 
   .logos__grid {

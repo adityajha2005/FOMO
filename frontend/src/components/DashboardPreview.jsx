@@ -346,7 +346,7 @@ function WindowFilter() {
   );
 }
 
-function OverviewPanel({ compact = false }) {
+function OverviewPanel({ compact = false, dense = false }) {
   const {
     roiPct,
     roiDelta,
@@ -365,9 +365,9 @@ function OverviewPanel({ compact = false }) {
     setSearchQuery,
   } = useTerminalContext();
 
-  const filteredEarners = earners.filter((row) =>
-    row.handle.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-  );
+  const filteredEarners = earners
+    .filter((row) => row.handle.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    .slice(0, dense ? 4 : 7);
 
   if (compact) {
     return (
@@ -407,7 +407,7 @@ function OverviewPanel({ compact = false }) {
             path={roiPath}
             values={roiValues}
             viewBox="0 0 340 96"
-            height={96}
+            height={dense ? 56 : 96}
             gradientId="dp-g1"
             valueLabel="ROI"
             formatValue={(value) => `${(value * 12).toFixed(1)}%`}
@@ -421,14 +421,16 @@ function OverviewPanel({ compact = false }) {
             <em>+{walletDelta}</em>
           </p>
           <p className="dp__sub">Top earners</p>
-          <input
-            className="dp__filter"
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Filter handles…"
-            aria-label="Filter top earners"
-          />
+          {!dense ? (
+            <input
+              className="dp__filter"
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Filter handles…"
+              aria-label="Filter top earners"
+            />
+          ) : null}
           <ul className="dp__list">
             {filteredEarners.map((row) => (
               <li key={row.handle}>
@@ -450,7 +452,7 @@ function OverviewPanel({ compact = false }) {
           path={volumePath}
           values={volumeValues}
           viewBox="0 0 900 120"
-          height={120}
+          height={dense ? 64 : 120}
           gradientId="dp-g2"
           valueLabel="Vol"
           formatValue={(value) => formatCompactUsd(value * copiedVolumeUsd)}
@@ -632,10 +634,10 @@ function ConfigPanel() {
   );
 }
 
-function TerminalMain({ compact = false }) {
+function TerminalMain({ compact = false, dense = false }) {
   const { activeNav } = useTerminalContext();
 
-  let panel = <OverviewPanel compact={compact} />;
+  let panel = <OverviewPanel compact={compact} dense={dense} />;
   if (!compact) {
     if (activeNav === "positions") panel = <PositionsPanel />;
     if (activeNav === "events") panel = <EventsPanel />;
@@ -653,17 +655,17 @@ function TerminalMain({ compact = false }) {
   );
 }
 
-function TerminalShell({ compact = false, label, className = "" }) {
+function TerminalShell({ compact = false, dense = false, label, className = "" }) {
   const { selectedTrader, closeTrader } = useTerminalContext();
 
   return (
-    <div className={`dp ${className}`.trim()} role="region" aria-label={label}>
+    <div className={`dp ${dense ? "dp--dense" : ""} ${className}`.trim()} role="region" aria-label={label}>
       <div className="dp__bar">
         <Chrome />
       </div>
       <div className="dp__body">
         <TerminalSidebar compact={compact} />
-        <TerminalMain compact={compact} />
+        <TerminalMain compact={compact} dense={dense} />
       </div>
       {selectedTrader ? (
         <TraderProfileModal embedded trader={selectedTrader} onClose={closeTrader} />
@@ -674,7 +676,7 @@ function TerminalShell({ compact = false, label, className = "" }) {
 
 /** Live terminal preview used in the hero. */
 export default function DashboardPreview() {
-  return <TerminalShell label="Session terminal preview" />;
+  return <TerminalShell dense label="Session terminal preview" />;
 }
 
 export function MiniDashboard() {

@@ -10,7 +10,6 @@ import TraderProfileModal from "../components/TraderProfileModal.jsx";
 import { TraderModalContext } from "../context/TraderModalContext.jsx";
 import GateStepper from "../components/GateStepper.jsx";
 import HeroTerminal from "../components/HeroTerminal.jsx";
-import PipelineDiagram from "../components/PipelineDiagram.jsx";
 import { LIVE_API_ENABLED } from "../config/api.js";
 import { useCopyTrader } from "../hooks/useCopyTrader.js";
 import { getBookTraders } from "../services/fomoApi.js";
@@ -896,21 +895,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 05 — pipeline */}
-        <section id="pipeline" className="fx-section">
-          <SectionHead
-            n="05"
-            kicker="Architecture"
-            title="One scan, end to end"
-            lede="Keys stay server-side in the proxy. The loop writes to one SQLite ledger, and both the terminal and this page read that same snapshot — there is no second source of truth."
-          />
-          <PipelineDiagram />
-        </section>
-
-        {/* 06 — rails */}
+        {/* 05 — rails */}
         <section id="rails" className="fx-section">
           <SectionHead
-            n="06"
+            n="05"
             kicker="Risk"
             title="The rails that make it boring"
             lede="Every number here lives in fomo_cli.cfg and is read once at boot. None of them can be raised by the loop while it is running."
@@ -927,10 +915,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 07 — exits */}
+        {/* 06 — exits */}
         <section id="exits" className="fx-section">
           <SectionHead
-            n="07"
+            n="06"
             kicker="Exits"
             title="The style decides how it ends"
             lede="A wallet is classified from median hold time, thesis count, and typical size. That single label sets both the multiplier on the way in and the rules on the way out."
@@ -970,10 +958,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 08 — trust */}
+        {/* 07 — trust */}
         <section id="trust" className="fx-section">
           <SectionHead
-            n="08"
+            n="07"
             kicker="Custody"
             title="There is nothing here to take"
             lede="The honest version of a trust section: in paper mode the software has no custody, so the question of whether we would move your funds does not arise."
@@ -1043,10 +1031,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 09 — CLI */}
+        {/* 08 — CLI */}
         <section id="cli" className="fx-section">
           <SectionHead
-            n="09"
+            n="08"
             kicker="The CLI"
             title="The terminal is the primary surface"
             lede="The dashboard renders what the CLI already prints. Anything you can see on a chart, you can read as a line — including the reason a trade was refused."
@@ -1066,10 +1054,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 10 — config */}
+        {/* 09 — config */}
         <section id="config" className="fx-section">
           <SectionHead
-            n="10"
+            n="09"
             kicker="The terms"
             title="Written in the config"
             lede="Nothing on this page is a policy we can change quietly. Every value below is read from a file you own, at boot, and printed in the banner when the loop starts."

@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 import InfoPageLayout, { CodeBlock, DocSection, Note } from "../components/InfoPageLayout.jsx";
+import PipelineDiagram from "../components/PipelineDiagram.jsx";
 
 const TOC = [
   { id: "what-this-is", label: "What this is" },
+  { id: "architecture", label: "Architecture" },
   { id: "setup", label: "Local setup" },
   { id: "manual", label: "Manual trades" },
   { id: "copy-bot", label: "Copy bot" },
@@ -78,6 +80,14 @@ export default function DocsPage() {
             <dd>FOMO API for traders and alerts. DexScreener for execution prices.</dd>
           </div>
         </dl>
+      </DocSection>
+
+      <DocSection id="architecture" title="One scan, end to end">
+        <p>
+          Keys stay server-side in the proxy. The loop writes to one SQLite ledger, and both the terminal
+          and this page read that same snapshot — there is no second source of truth.
+        </p>
+        <PipelineDiagram />
       </DocSection>
 
       <DocSection id="setup" title="Local setup">
