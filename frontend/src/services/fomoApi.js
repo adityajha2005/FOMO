@@ -30,8 +30,8 @@ async function fomoapiRequest(path, { requireKey = false } = {}) {
     if (response.status === 401) {
       throw new Error(
         requireKey
-          ? "Add FOMO_API_KEY to frontend/.env (local) or Vercel env vars (production) for token boards, holders, and stats."
-          : "Add FOMO_API_KEY to frontend/.env (local) or Vercel env vars (production). Free keys at https://fomoapi.io/dashboard",
+          ? "FOMO API returned 401. Check FOMO_API_KEY in frontend/.env (local) or Vercel env vars (production), then restart dev / redeploy."
+          : "FOMO API returned 401. The leaderboard now requires FOMO_API_KEY — add it to frontend/.env or Vercel, then restart dev / redeploy.",
       );
     }
     throw new Error(message);

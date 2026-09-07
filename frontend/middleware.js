@@ -1,12 +1,10 @@
 function isKeylessFomoPath(path) {
   const normalized = path.replace(/^\//, "");
 
-  // Trader PnL boards are free; token boards (trending, most-held, etc.) need FOMO_API_KEY.
-  if (/^v2\/leaderboard\/(24h|7d|30d|all)(\?|$)/.test(normalized)) {
-    return true;
-  }
-
+  // Documented as lower-credit endpoints; still attach FOMO_API_KEY when set
+  // because fomoapi.io now returns 401 without a bearer token on leaderboard too.
   return (
+    /^v2\/leaderboard\/(24h|7d|30d|all)(\?|$)/.test(normalized) ||
     normalized.startsWith("v2/alerts") ||
     normalized === "v1" ||
     normalized.startsWith("v1/") ||
@@ -35,8 +33,17 @@ export default async function middleware(request) {
     const targetUrl = `https://api.fomoapi.io/${path}${search}`;
     const headers = {};
 
-    if (process.env.FOMO_API_KEY && !isKeylessFomoPath(path)) {
+    if (process.env.FOMO_API_KEY) {
       headers.Authorization = `Bearer ${process.env.FOMO_API_KEY}`;
+    } else if (!isKeylessFomoPath(path)) {
+      return Response.json(
+        {
+          error: "API key required",
+          message:
+            "Set FOMO_API_KEY in Vercel env vars (or frontend/.env locally), then redeploy / restart the dev server.",
+        },
+        { status: 401 },
+      );
     }
 
     try {
