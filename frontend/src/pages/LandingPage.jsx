@@ -690,10 +690,10 @@ export default function LandingPage() {
           <GateStepper />
         </section>
 
-        {/* 04 — the book */}
+        {/* 03 — the book */}
         <section id="book" className="fx-section fx-section--book">
           <SectionHead
-            n="04"
+            n="03"
             kicker="The book"
             title="The 122"
             lede="Ranked from the live FOMO leaderboard. Not on PnL alone: a coin needs a buyer base, so audience carries the same weight as profit."
@@ -825,10 +825,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 05 — session */}
+        {/* 04 — session */}
         <section id="session" className="fx-section">
           <SectionHead
-            n="05"
+            n="04"
             kicker="Session"
             title="What the loop has actually done"
             lede="Read straight from the local ledger every five seconds. If the API is not running these read zero — the page does not invent numbers to look busy."
@@ -896,10 +896,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 07 — pipeline */}
+        {/* 05 — pipeline */}
         <section id="pipeline" className="fx-section">
           <SectionHead
-            n="07"
+            n="05"
             kicker="Architecture"
             title="One scan, end to end"
             lede="Keys stay server-side in the proxy. The loop writes to one SQLite ledger, and both the terminal and this page read that same snapshot — there is no second source of truth."
@@ -907,10 +907,10 @@ export default function LandingPage() {
           <PipelineDiagram />
         </section>
 
-        {/* 08 — rails */}
+        {/* 06 — rails */}
         <section id="rails" className="fx-section">
           <SectionHead
-            n="08"
+            n="06"
             kicker="Risk"
             title="The rails that make it boring"
             lede="Every number here lives in fomo_cli.cfg and is read once at boot. None of them can be raised by the loop while it is running."
@@ -927,10 +927,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 09 — exits */}
+        {/* 07 — exits */}
         <section id="exits" className="fx-section">
           <SectionHead
-            n="09"
+            n="07"
             kicker="Exits"
             title="The style decides how it ends"
             lede="A wallet is classified from median hold time, thesis count, and typical size. That single label sets both the multiplier on the way in and the rules on the way out."
@@ -970,10 +970,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 11 — trust */}
+        {/* 08 — trust */}
         <section id="trust" className="fx-section">
           <SectionHead
-            n="11"
+            n="08"
             kicker="Custody"
             title="There is nothing here to take"
             lede="The honest version of a trust section: in paper mode the software has no custody, so the question of whether we would move your funds does not arise."
@@ -1043,10 +1043,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 12 — CLI */}
+        {/* 09 — CLI */}
         <section id="cli" className="fx-section">
           <SectionHead
-            n="12"
+            n="09"
             kicker="The CLI"
             title="The terminal is the primary surface"
             lede="The dashboard renders what the CLI already prints. Anything you can see on a chart, you can read as a line — including the reason a trade was refused."
@@ -1066,10 +1066,10 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 13 — config */}
+        {/* 10 — config */}
         <section id="config" className="fx-section">
           <SectionHead
-            n="13"
+            n="10"
             kicker="The terms"
             title="Written in the config"
             lede="Nothing on this page is a policy we can change quietly. Every value below is read from a file you own, at boot, and printed in the banner when the loop starts."
